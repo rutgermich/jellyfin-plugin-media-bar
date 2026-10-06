@@ -3806,8 +3806,13 @@ const LayoutSync = {
     return true;
   },
 
+  getPage() {
+    const rows = document.querySelector(".homeSectionsContainer");
+    return rows?.closest(".page") || document.querySelector(".page:not(.hide)");
+  },
+
   update() {
-    const page = document.querySelector(".page");
+    const page = this.getPage();
     if (!page) return;
 
     const offset = Math.max(
@@ -3871,7 +3876,7 @@ const LayoutSync = {
     this.rowsObserver = new ResizeObserver(() => this.update());
     this.rowsObserver.observe(rows);
 
-    const page = document.querySelector(".page");
+    const page = this.getPage();
     if (page) this.rowsObserver.observe(page);
   },
 };
