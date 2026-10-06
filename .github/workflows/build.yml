@@ -1,0 +1,74 @@
+name: Build plugin
+
+# Builds the plugin from the `custom` branch, publishes it as a GitHub release
+# and prepends the new version to manifest.json, which Jellyfin reads as a
+# plugin repository:
+#   https://raw.githubusercontent.com/rutgermich/jellyfin-plugin-media-bar/custom/manifest.json
+
+on:
+  push:
+    branches: [custom]
+    paths-ignore:
+      - manifest.json
+      - README.md
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-custom
+  cancel-in-progress: false
+
+env:
+  PROJECT: src/Jellyfin.Plugin.MediaBar/Jellyfin.Plugin.MediaBar.csproj
+  VERSION: 3.0.0.${{ github.run_number }}
+  TARGET_ABI: 12.0.0.0
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Stamp version
+        run: |
+          sed -i -E "s/AssemblyVersion\(\"[0-9.]+\"\)/AssemblyVersion(\"$VERSION\")/" src/Jellyfin.Plugin.MediaBar/Properties/AssemblyInfo.cs
+          sed -i -E "s#<Version>[0-9.]+</Version>#<Version>$VERSION</Version>#" "$PROJECT"
+          grep -q "AssemblyVersion(\"$VERSION\")" src/Jellyfin.Plugin.MediaBar/Properties/AssemblyInfo.cs
+          grep -q "<Version>$VERSION</Version>" "$PROJECT"
+
+      - name: Build
+        run: dotnet build "$PROJECT" -c Release -o out --nologo
+
+      - name: Package
+        run: |
+          mkdir pkg
+          cp out/Jellyfin.Plugin.MediaBar.dll pkg/
+          (cd pkg && zip -X "../media-bar_$VERSION.zip" Jellyfin.Plugin.MediaBar.dll)
+          echo "CHECKSUM=$(md5sum "media-bar_$VERSION.zip" | cut -d' ' -f1 | tr a-f A-F)" >> "$GITHUB_ENV"
+
+      - name: Release
+        run: |
+          gh release create "v$VERSION" "media-bar_$VERSION.zip" \
+            --target "$GITHUB_SHA" \
+            --title "Media Bar $VERSION" \
+            --notes "Built from $GITHUB_SHA for Jellyfin $TARGET_ABI."
+
+      - name: Update manifest
+        run: |
+          git checkout -- src
+          bash .github/scripts/update-manifest.sh \
+            "$VERSION" "$TARGET_ABI" "$CHECKSUM" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/media-bar_$VERSION.zip" \
+            "$(git log -1 --format=%s)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "Publish $VERSION in manifest"
+          git push origin HEAD:custom

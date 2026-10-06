@@ -1,0 +1,11 @@
+[
+  {
+    "guid": "08f615ea-2107-4f04-89cc-091035f54448",
+    "name": "Media Bar",
+    "description": "Featured content bar on the Jellyfin home screen. Custom build of IAmParadox27/jellyfin-plugin-media-bar with local fixes.",
+    "overview": "Media Bar (rutgermich build)",
+    "owner": "rutgermich",
+    "category": "General",
+    "versions": []
+  }
+]
