@@ -11,6 +11,8 @@ on:
     paths-ignore:
       - manifest.json
       - README.md
+      - .github/**
+      - tizen/**
 
 permissions:
   contents: write

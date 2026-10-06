@@ -1,0 +1,24 @@
+{
+  "name": "media-bar-tizen",
+  "private": true,
+  "type": "module",
+  "description": "Adds the media bar to a jellyfin-tizen .wgt, lowered for the Chromium versions in Samsung TVs.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/run.mjs"
+  },
+  "dependencies": {
+    "acorn": "^8.14.0",
+    "adm-zip": "^0.5.16",
+    "browserslist": "^4.24.0",
+    "doiuse": "^6.0.5",
+    "esbuild": "^0.25.0",
+    "lightningcss": "^1.29.0",
+    "postcss": "^8.5.0",
+    "postcss-value-parser": "^4.2.0",
+    "resize-observer-polyfill": "^1.5.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

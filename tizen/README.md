@@ -1,0 +1,42 @@
+# Media bar for jellyfin-tizen
+
+The Media Bar plugin injects its script into the web client that the Jellyfin
+server hands out. The Samsung TV app ships its own copy of the web client and
+never loads that page, so the bar has to be built into the app package.
+
+`build.mjs` takes a jellyfin-tizen `.wgt` (for example from
+[jellyfin-tizen-builds](https://github.com/jeppevinkel/jellyfin-tizen-builds/releases))
+and adds the bar to it:
+
+```
+npm ci
+node build.mjs Jellyfin-12.z-OblongIcon.wgt
+```
+
+The result, `Jellyfin-12.z-OblongIcon-mediabar.wgt`, is **unsigned**. Sign it
+with your own Samsung certificate when installing, as with any sideloaded build.
+
+## What the build changes
+
+Samsung TVs run old Chromium versions (Tizen 5.0 → 63, Tizen 5.5 → 69), so the
+bar's assets are lowered before they go into `www/mediabar/`:
+
+- `slideshowpure.js` is transpiled with esbuild; `polyfills.src.js` adds
+  `ResizeObserver` and `replaceChildren`.
+- `slideshowpure.css` goes through `lower-css.mjs`. A TV app always renders at
+  1920×1080 with a 20px root font, so `clamp()`/`min()`/`max()` are resolved to
+  pixels at build time, flex `gap` becomes margins, `:focus-visible` becomes
+  `:focus`, and Lightning CSS handles colour syntax and prefixes.
+- `tizen-config.js` applies the plugin's server settings and turns trailers off.
+
+Known limits: rules that need `:has()` are dropped (the build lists them),
+panels have no background blur, and trailers are disabled.
+
+## Test
+
+`npm test` renders the bar in headless Chromium at TV resolution with the
+original and the lowered assets, in all three layouts and with the settings
+panel open, and fails when any element ends up somewhere else. It also checks
+the lowered CSS against Chromium 63 support data.
+
+It does not run Chromium 63 itself, so it cannot replace a test on a TV.
