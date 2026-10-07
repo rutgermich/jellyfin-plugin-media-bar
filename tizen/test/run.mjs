@@ -59,7 +59,7 @@ function page({ css, scripts }) {
 <script>
 window.ApiClient = {
     isLoggedIn: function () { return !window.signedOut; },
-    accessToken: function () { return 'token'; },
+    accessToken: function () { return window.testToken || 'token'; },
     getCurrentUserId: function () { return window.testUserId || 'user1'; },
     serverAddress: function () { return location.origin; },
     serverId: function () { return 'server1'; },
@@ -84,6 +84,8 @@ ${'<div class="verticalSection"></div>'.repeat(5)}
 </body></html>`;
 }
 
+let flakySeen = false;
+
 function startServer(variants) {
     const server = http.createServer((request, response) => {
         const url = new URL(request.url, 'http://localhost');
@@ -104,7 +106,14 @@ function startServer(variants) {
             return send('text/plain', '', 404);
         }
         if (/\/Views$/.test(url.pathname)) return send('application/json', JSON.stringify({ Items: [] }));
-        if (/^\/Items\/?$/.test(url.pathname)) return send('application/json', JSON.stringify({ Items: ITEMS }));
+        if (/^\/Items\/?$/.test(url.pathname)) {
+            // the first request of a "flaky" client is never answered
+            if (/Token="flaky"/.test(request.headers.authorization || '') && !flakySeen) {
+                flakySeen = true;
+                return undefined;
+            }
+            return send('application/json', JSON.stringify({ Items: ITEMS }));
+        }
         return send('application/json', '{}', 404);
     });
     return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server)));
@@ -266,6 +275,20 @@ for (const layout of ['plate', 'marquee', 'classic']) {
         .then(() => true, () => false);
     console.log(`unanswered request: bar ${started ? 'starts after the timeout' : 'never starts'}`);
     if (!started) failures += 1;
+    await context.close();
+}
+
+// When loading the titles times out, the bar must try again by itself.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.addInitScript(() => { window.testToken = 'flaky'; window.mediaBarRequestTimeoutMs = 1500; });
+    await tab.goto(`${base}/lowered/#/home.html`);
+    const started = await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 30000 })
+        .then(() => true, () => false);
+    const chrome = await tab.evaluate(() => document.querySelectorAll('#slides-container .arrow').length);
+    console.log(`titles time out once: bar ${started ? 'loads on the retry' : 'stays empty'}, ${chrome} arrows`);
+    if (!started || chrome !== 2) failures += 1;
     await context.close();
 }
 

@@ -4,7 +4,7 @@
 (function () {
     'use strict';
 
-    var MAX_LINES = 10;
+    var MAX_LINES = 8;
     var lines = [];
     var box;
 
@@ -45,6 +45,43 @@
     window.addEventListener('unhandledrejection', function (event) {
         add('X', ['unhandled rejection:', event.reason]);
     });
+
+    // Every fetch the page makes, to see whether requests pile up.
+    var inFlight = [];
+    var finished = 0;
+    var nativeFetch = window.fetch;
+    window.fetch = function (url) {
+        var entry = { url: String(url && url.url || url).replace(/^https?:\/\/[^/]+/, '').slice(0, 60), started: Date.now() };
+        inFlight.push(entry);
+        var done = function () {
+            var index = inFlight.indexOf(entry);
+            if (index !== -1) inFlight.splice(index, 1);
+            finished += 1;
+        };
+        var promise = nativeFetch.apply(window, arguments);
+        promise.then(done, done);
+        return promise;
+    };
+
+    // A cheap and a heavy request with the bar's own headers, timed.
+    var probes = [];
+    function probe(label, path) {
+        var bar = window.slideshowPure;
+        var entry = { label: label, result: 'pending', started: Date.now() };
+        probes.push(entry);
+        var finish = function (result) { entry.result = result + ' in ' + (Date.now() - entry.started) + 'ms'; };
+        nativeFetch(bar.STATE.jellyfinData.serverAddress + path, { headers: bar.ApiUtils.getAuthHeaders() }).then(function (response) {
+            return response.text().then(function (body) { finish(response.status + ', ' + body.length + ' bytes'); });
+        }).then(null, function (error) { finish('failed: ' + (error && error.message)); });
+    }
+    var probing = setInterval(function () {
+        var bar = window.slideshowPure;
+        if (!bar || !bar.STATE.jellyfinData || !bar.STATE.jellyfinData.accessToken) return;
+        clearInterval(probing);
+        probe('one item', '/Items?IncludeItemTypes=Movie&Recursive=true&Limit=1');
+        probe('random 50', '/Items?IncludeItemTypes=Movie,Series&Recursive=true&SortBy=Random&Limit=50');
+        probe('bar query', '/Items?IncludeItemTypes=Movie,Series&Recursive=true&hasOverview=true&imageTypes=Logo,Backdrop&SortBy=Random&isPlayed=False&Limit=50');
+    }, 1000);
 
     function style(element, prop) {
         return element ? getComputedStyle(element)[prop] : '-';
@@ -88,7 +125,14 @@
                 ' items=' + s.totalItems + ' index=' + s.currentSlideIndex + ' layout=' + bar.CONFIG.layout);
         }
 
-        (window.mediaBarRequests || []).forEach(function (request) {
+        var oldest = inFlight[0];
+        out.push('fetches: ' + inFlight.length + ' open, ' + finished + ' done' +
+            (oldest ? ', oldest open ' + Math.round((Date.now() - oldest.started) / 1000) + 's ' + oldest.url : ''));
+        probes.forEach(function (entry) {
+            out.push('probe ' + entry.label + ': ' + entry.result +
+                (entry.result === 'pending' ? ' (' + Math.round((Date.now() - entry.started) / 1000) + 's so far)' : ''));
+        });
+        (window.mediaBarRequests || []).slice(-4).forEach(function (request) {
             var age = request.status === 'pending' ? Math.round((Date.now() - request.started) / 1000) + 's so far' : request.ms + 'ms';
             out.push('request: ' + request.status + ' (' + age + ') ' + request.url);
         });
@@ -113,7 +157,7 @@
         if (!document.body) return;
         if (!box) {
             box = document.createElement('pre');
-            box.style.cssText = 'position:fixed;right:10px;bottom:10px;width:1180px;margin:0;padding:10px 12px;z-index:2147483647;' +
+            box.style.cssText = 'position:fixed;right:10px;bottom:10px;width:1250px;margin:0;padding:10px 12px;z-index:2147483647;' +
                 'background:rgba(0,0,0,.86);color:#9f9;font:15px/1.3 monospace;white-space:pre-wrap;word-break:break-all;' +
                 'pointer-events:none;border:1px solid #4a4;';
         }

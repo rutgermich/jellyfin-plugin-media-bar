@@ -53,8 +53,35 @@
         }
     }
 
+    // When loading the titles fails (the TV's home screen loads at the same
+    // time and requests can time out), the bar stays empty for good. Ask again
+    // a few times, with a pause in between.
+    var MAX_RELOADS = 5;
+    var RELOAD_PAUSE_MS = 10000;
+    var reloads = 0;
+    var idleSince = 0;
+
+    function reloadWhenEmpty(bar) {
+        var state = bar.STATE.slideshow;
+        var empty = state.hasInitialized && !state.isBootstrapping && !state.isLoading && !state.totalItems;
+        if (!empty) {
+            idleSince = 0;
+            return;
+        }
+        if (!idleSince) idleSince = Date.now();
+        if (reloads < MAX_RELOADS && Date.now() - idleSince >= RELOAD_PAUSE_MS) {
+            reloads += 1;
+            idleSince = 0;
+            console.log('Media Bar: no titles loaded, trying again (' + reloads + '/' + MAX_RELOADS + ')');
+            bar.initSlideshowData();
+        }
+    }
+
     setInterval(function () {
-        if (window.slideshowPure && window.slideshowPure.STATE) startWhenSignedIn(window.slideshowPure);
+        var bar = window.slideshowPure;
+        if (!bar || !bar.STATE) return;
+        startWhenSignedIn(bar);
+        reloadWhenEmpty(bar);
     }, 3000);
 
     var waiting = setInterval(function () {

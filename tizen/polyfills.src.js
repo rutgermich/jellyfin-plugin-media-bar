@@ -23,7 +23,7 @@ function replaceChildren() {
 // calls). A request that never settles would otherwise leave the bar loading
 // forever; the bar already falls back when a request fails. The short history
 // is what the debug overlay shows.
-var REQUEST_TIMEOUT_MS = 20000;
+var REQUEST_TIMEOUT_MS = 45000;
 var requests = window.mediaBarRequests = [];
 
 window.mediaBarFetch = function (url, options) {
@@ -38,13 +38,20 @@ window.mediaBarFetch = function (url, options) {
         }
     };
 
+    // Without `no-store` a retry of the same address waits behind the request
+    // that is still hanging, because the browser cache serialises them.
+    var settings = Object.assign({ cache: 'no-store' }, options);
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+    if (controller) settings.signal = controller.signal;
+
     return new Promise(function (resolve, reject) {
         var timer = setTimeout(function () {
             settle('timeout');
+            if (controller) controller.abort();
             reject(new Error('Request timed out: ' + entry.url));
         }, window.mediaBarRequestTimeoutMs || REQUEST_TIMEOUT_MS);
 
-        window.fetch(url, options).then(function (response) {
+        window.fetch(url, settings).then(function (response) {
             clearTimeout(timer);
             settle(response.status);
             resolve(response);
