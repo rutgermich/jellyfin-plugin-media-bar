@@ -1,0 +1,84 @@
+name: Build Tizen package
+
+# Builds the Jellyfin TV app with the media bar inside it (see tizen/README.md)
+# from the `tizen-build` branch and publishes both packages as a GitHub
+# release named "Tizen build <n>".
+
+on:
+  push:
+    branches: [tizen-build]
+    paths:
+      - tizen/**
+      - slideshowpure.js
+      - slideshowpure.css
+      - .github/workflows/tizen.yml
+      - '!tizen/**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-tizen
+  cancel-in-progress: false
+
+env:
+  BASE_REPO: jeppevinkel/jellyfin-tizen-builds
+  BASE_NAME: Jellyfin-12.z-OblongIcon
+  # Builds 1-7 were made by hand; the numbering carries on from there.
+  BUILD_OFFSET: 6
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tizen
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tizen/package-lock.json
+
+      - run: npm ci
+
+      - name: Test
+        run: |
+          npx playwright install --with-deps chromium
+          npm test
+
+      - name: Download the base package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo "$BASE_REPO" --pattern "$BASE_NAME.wgt"
+          echo "BASE_TAG=$(gh release view --repo "$BASE_REPO" --json tagName --jq .tagName)" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          node build.mjs "$BASE_NAME.wgt"
+          node build.mjs --debug "$BASE_NAME.wgt"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build=$((GITHUB_RUN_NUMBER + BUILD_OFFSET))
+          {
+            cat RELEASE_NOTES.md
+            echo
+            echo "Based on \`$BASE_NAME.wgt\` from [jellyfin-tizen-builds](https://github.com/$BASE_REPO) release \`$BASE_TAG\`, built from ${GITHUB_SHA::7}."
+            echo
+            echo '```'
+            sha256sum "$BASE_NAME-mediabar.wgt" "$BASE_NAME-mediabar-debug.wgt"
+            echo '```'
+          } > notes.md
+          gh release create "tizen-$build" \
+            "$BASE_NAME-mediabar.wgt" "$BASE_NAME-mediabar-debug.wgt" \
+            --target "$GITHUB_SHA" \
+            --title "Tizen build $build: Media Bar for Samsung TVs" \
+            --notes-file notes.md \
+            --latest=false

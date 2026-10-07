@@ -74,6 +74,11 @@ This writes `Jellyfin-12.z-OblongIcon-mediabar.wgt` next to the input. Add
 `--debug` for the build with the overlay, and a second path to choose the
 output name.
 
+Every push to the `tizen-build` branch that touches the bar or this folder runs
+`.github/workflows/tizen.yml`, which tests, builds against the newest
+jellyfin-tizen-builds release and publishes both packages as a new release.
+The text of the release comes from `RELEASE_NOTES.md`.
+
 ## What the build changes
 
 Samsung TVs run old Chromium versions (Tizen 5.0 → 63, Tizen 5.5 → 69), so the
