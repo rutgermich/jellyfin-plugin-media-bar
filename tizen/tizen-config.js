@@ -21,6 +21,9 @@
         // Trailer sizing relies on container query units, which the TV's
         // browser engine does not have.
         config.enableTrailers = false;
+        // A TV has no mouse to move away again; a stray pointer event would
+        // hold the slideshow on one title for good.
+        config.pauseOnHover = false;
     }
 
     function applyServerConfig(config, serverConfig) {
@@ -77,12 +80,42 @@
         }
     }
 
+    // When the bar moves on by itself, the remote's focus is still on a button
+    // of the slide that just left, and OK would act on that title. Move it to
+    // the same button of the slide now showing.
+    function followSlide(container) {
+        var focused = document.activeElement;
+        if (!focused || !container.contains(focused)) return;
+        var from = focused.closest ? focused.closest('.slide') : null;
+        var active = container.querySelector('.slide.active');
+        if (!from || !active || from === active) return;
+        var kind = ['play-button', 'detail-button', 'favorite-button'].filter(function (name) {
+            return focused.classList.contains(name);
+        })[0];
+        var target = active.querySelector('.' + (kind || 'play-button'));
+        if (target) target.focus();
+    }
+
+    var watching = setInterval(function () {
+        var container = document.getElementById('slides-container');
+        if (!container) return;
+        clearInterval(watching);
+        new MutationObserver(function () { followSlide(container); })
+            .observe(container, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    }, 1000);
+
     setInterval(function () {
         var bar = window.slideshowPure;
         if (!bar || !bar.STATE) return;
         startWhenSignedIn(bar);
         reloadWhenEmpty(bar);
     }, 3000);
+
+    // This file runs right after slideshowpure.js, before the bar has loaded
+    // anything; apply the overrides now so they hold from the first slide.
+    if (window.slideshowPure && window.slideshowPure.CONFIG) {
+        applyTvOverrides(window.slideshowPure.CONFIG);
+    }
 
     var waiting = setInterval(function () {
         if (!window.slideshowPure || !window.slideshowPure.CONFIG) return;

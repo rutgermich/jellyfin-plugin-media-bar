@@ -358,6 +358,32 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     await context.close();
 }
 
+// Without trailers the bar must move on by itself, and the remote's focus
+// must move along to the title that is showing.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.goto(`${base}/tv/?ss_layout=marquee&ss_shuffleInterval=2000#/home.html`);
+    await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 20000 });
+    await tab.focus('#slides-container .slide.active .detail-button');
+    const shown = () => tab.evaluate(() => {
+        const active = document.querySelector('#slides-container .slide.active');
+        const focused = document.activeElement;
+        return { title: active.dataset.itemId, focusOnIt: active.contains(focused), button: focused.className };
+    });
+    const first = await shown();
+    const moved = await tab.waitForFunction(
+        title => document.querySelector('#slides-container .slide.active').dataset.itemId !== title,
+        first.title, { timeout: 8000 }
+    ).then(() => true, () => false);
+    await tab.waitForTimeout(300);
+    const second = await shown();
+    const follows = second.focusOnIt && /detail-button/.test(second.button);
+    console.log(`slideshow: ${moved ? 'moves to the next title by itself' : 'stays on the first title'}, focus ${follows ? 'follows' : 'stays behind'}`);
+    if (!moved || !follows) failures += 1;
+    await context.close();
+}
+
 // The second start must show the stored titles without waiting for the
 // server, and ask the server again afterwards.
 {

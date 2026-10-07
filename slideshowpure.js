@@ -3783,8 +3783,9 @@ const SlideshowManager = {
           this.nextSlide();
         }
       }, CONFIG.shuffleInterval);
+      // Held until the first slide is up: updateCurrentSlide starts it, or
+      // hands over to the trailer, which moves on when it ends.
       STATE.slideshow.slideInterval.stop();
-      STATE.slideshow.slideInterval = null; // Ensure that updateCurrentSlide doesn't restart the timer
 
       await this.updateCurrentSlide(STATE.slideshow.resumeIndex || 0);
     } catch (error) {
