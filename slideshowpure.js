@@ -4456,6 +4456,7 @@ const initPageVisibilityHandler = () => {
 window.slideshowPure = {
   CONFIG,
   STATE,
+  bootstrap,
   SlideUtils,
   ApiUtils,
   BlurHash,

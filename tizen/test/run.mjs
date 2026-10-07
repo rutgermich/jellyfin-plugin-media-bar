@@ -19,9 +19,15 @@ import { TV } from '../lower-css.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../..');
 const TOLERANCE_PX = 1;
-// `.ss-set-value` keeps its own `margin-left: auto` instead of the row gap,
-// which moves the number in a slider row by 2px.
-const KNOWN_DIFFERENCES = [/span\.ss-set-value\[\d+\]$/];
+const KNOWN_DIFFERENCES = [
+    // `.ss-set-value` keeps its own `margin-left: auto` instead of the row gap,
+    // which moves the number in a slider row by 2px.
+    { key: /span\.ss-set-value\[\d+\]$/, props: ['x'] },
+    // Wrapping rows carry the gap between their lines as a margin under every
+    // item, so their own box is one gap taller. A negative margin keeps
+    // everything after them in place, and they have no background or border.
+    { key: /div\.(spec-line|misc-info|genre)\[\d+\]$/, props: ['height'] }
+];
 
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAUAAAAC0CAYAAADl5PURAAAAOklEQVR42u3BAQEAAACCIP+vbkhAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH8GkrQAAfrUu6IAAAAASUVORK5CYII=', 'base64');
 
@@ -46,13 +52,13 @@ const ITEMS = [1, 2, 3, 4].map(n => ({
 
 function page({ css, scripts }) {
     return `<!doctype html>
-<html class="layout-tv" style="font-size:125%"><head><meta charset="utf-8">
+<html class="layout-tv" style="font-size:${TV.rootFontSize}px"><head><meta charset="utf-8">
 <style>body{margin:0;background:#101010;color:#fff;font-family:sans-serif}.hide{display:none!important}
 .verticalSection{height:15rem;border-top:1px solid #333}</style>
 <style>${css}</style>
 <script>
 window.ApiClient = {
-    isLoggedIn: function () { return true; },
+    isLoggedIn: function () { return !window.signedOut; },
     accessToken: function () { return 'token'; },
     getCurrentUserId: function () { return 'user1'; },
     serverAddress: function () { return location.origin; },
@@ -219,9 +225,9 @@ for (const layout of ['plate', 'marquee', 'classic']) {
             continue;
         }
         if (a.hidden && b.hidden) continue;
-        if (KNOWN_DIFFERENCES.some(pattern => pattern.test(key))) continue;
         const moved = ['x', 'y', 'width', 'height', 'fontSize', 'hidden']
             .filter(prop => Math.abs(a[prop] - b[prop]) > TOLERANCE_PX)
+            .filter(prop => !KNOWN_DIFFERENCES.some(known => known.key.test(key) && known.props.includes(prop)))
             .map(prop => `${prop} ${Math.round(a[prop] * 10) / 10} -> ${Math.round(b[prop] * 10) / 10}`);
         if (moved.length) differences.push(`${key}: ${moved.join(', ')}`);
     }
@@ -229,6 +235,22 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     console.log(`${layout}: ${keys.size} elements compared, ${differences.length} differ`);
     for (const difference of differences) console.log(`  ${difference}`);
     failures += differences.length;
+}
+
+// Signing in after the bar's own timeout has passed must still start it.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.addInitScript(() => { window.signedOut = true; });
+    await tab.goto(`${base}/lowered/?ss_authWaitTimeoutMs=1000#/home.html`);
+    await tab.waitForTimeout(2500);
+    const before = await tab.evaluate(() => Boolean(document.querySelector('#slides-container .slide')));
+    await tab.evaluate(() => { window.signedOut = false; });
+    const started = await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 15000 })
+        .then(() => true, () => false);
+    console.log(`late sign-in: bar ${before ? 'started too early' : started ? 'starts after sign-in' : 'never starts'}`);
+    if (before || !started) failures += 1;
+    await context.close();
 }
 
 await browser.close();

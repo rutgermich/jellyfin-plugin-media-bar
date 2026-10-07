@@ -27,7 +27,7 @@ bar's assets are lowered before they go into `www/mediabar/`:
 - `slideshowpure.js` is transpiled with esbuild; `polyfills.src.js` adds
   `ResizeObserver` and `replaceChildren`.
 - `slideshowpure.css` goes through `lower-css.mjs`. A TV app always renders at
-  1920×1080 with a 20px root font, so `clamp()`/`min()`/`max()` are resolved to
+  1920×1080 with a 27px root font, so `clamp()`/`min()`/`max()` are resolved to
   pixels at build time, flex `gap` becomes margins, `:focus-visible` becomes
   `:focus`, and Lightning CSS handles colour syntax and prefixes.
 - `tizen-config.js` applies the plugin's server settings and turns trailers off.

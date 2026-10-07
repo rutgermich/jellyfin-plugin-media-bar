@@ -17,8 +17,8 @@ import browserslist from 'browserslist';
 export const TV = {
     width: 1920,
     height: 1080,
-    // jellyfin-web: `.layout-tv { font-size: 125% }` on <html>
-    rootFontSize: 20
+    // jellyfin-web: `@media (min-height: 1000px) { html { font-size: 27px } }`
+    rootFontSize: 27
 };
 
 const UNIT_PX = {
@@ -205,7 +205,7 @@ function collectFlexFacts(root) {
     root.walkRules(rule => {
         // rules inside @media describe other screen sizes than the TV's
         if (rule.parent.type !== 'root') return;
-        rule.walkDecls(/^(display|flex-direction|flex-flow|justify-content)$/, decl => {
+        rule.walkDecls(/^(display|flex-direction|flex-flow|flex-wrap|justify-content)$/, decl => {
             for (const selector of rule.selectors) {
                 remember(selector, decl.prop, decl.value);
                 if (/^\.[\w-]+$/.test(selector.trim())) remember(`@${selector.trim()}`, decl.prop, decl.value);
@@ -237,6 +237,7 @@ function flexLayout(selector, facts) {
     return {
         type: 'flex',
         column: /column/.test(flow),
+        wraps: /wrap/.test(pick('flex-wrap') || '') && !/nowrap/.test(pick('flex-wrap') || '') || /wrap/.test(flow),
         // refines a class that lays its items out along the other axis, whose
         // margins would otherwise stay in effect
         flips: Boolean(ownFlow) && sources.length > 1 && /column/.test(ownFlow) !== /column/.test(baseFlow),
@@ -315,6 +316,7 @@ function lowerGap(root, report) {
             column: newGroup('margin-top', rowGap),
             row: newGroup('margin-left', columnGap)
         };
+        const wrapped = { items: [], containers: [] };
         let grid = false;
 
         for (const selector of rule.selectors) {
@@ -326,6 +328,12 @@ function lowerGap(root, report) {
             if (layout.type === 'grid') {
                 grid = true;
                 continue;
+            }
+            // Space between the lines of a wrapping row: a margin under every
+            // item, taken back off below the last line by the container.
+            if (!layout.column && decl.prop !== 'column-gap' && (decl.prop === 'row-gap' || layout.wraps) && !/^0[a-z%]*$/.test(rowGap)) {
+                wrapped.items.push(`${selector} > *`);
+                wrapped.containers.push(selector);
             }
             if (layout.column ? decl.prop === 'column-gap' : decl.prop === 'row-gap') continue;
 
@@ -353,6 +361,8 @@ function lowerGap(root, report) {
             anchor = anchor.cloneAfter({ selectors, nodes: [] });
             for (const [prop, value] of declarations) anchor.append({ prop, value });
         };
+        emit(wrapped.containers, [['margin-bottom', negate(rowGap)]]);
+        emit(wrapped.items, [['margin-bottom', rowGap]]);
         for (const group of Object.values(groups)) {
             emit(group.spacers, [['content', '""'], [group.prop, negate(group.gap)]]);
             emit(group.items, [[group.prop, group.gap]]);

@@ -37,6 +37,26 @@
         }
     }
 
+    // The bar gives up when nobody is signed in within its timeout, and after
+    // that only looks again when the page address changes. On a TV, picking a
+    // server and typing a password easily takes longer, so keep checking.
+    function startWhenSignedIn(bar) {
+        var state = bar.STATE.slideshow;
+        var apiClient = window.ApiClient;
+        if (state.hasInitialized || state.isBootstrapping || typeof bar.bootstrap !== 'function') return;
+        try {
+            if (apiClient && apiClient.isLoggedIn() && apiClient.accessToken() && apiClient.getCurrentUserId()) {
+                bar.bootstrap();
+            }
+        } catch (error) {
+            // ApiClient is not ready yet
+        }
+    }
+
+    setInterval(function () {
+        if (window.slideshowPure && window.slideshowPure.STATE) startWhenSignedIn(window.slideshowPure);
+    }, 3000);
+
     var waiting = setInterval(function () {
         if (!window.slideshowPure || !window.slideshowPure.CONFIG) return;
 
