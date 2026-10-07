@@ -4,7 +4,7 @@
 (function () {
     'use strict';
 
-    var MAX_LINES = 14;
+    var MAX_LINES = 10;
     var lines = [];
     var box;
 
@@ -87,6 +87,11 @@
             out.push('script: initialized=' + s.hasInitialized + ' bootstrapping=' + s.isBootstrapping + ' loading=' + s.isLoading +
                 ' items=' + s.totalItems + ' index=' + s.currentSlideIndex + ' layout=' + bar.CONFIG.layout);
         }
+
+        (window.mediaBarRequests || []).forEach(function (request) {
+            var age = request.status === 'pending' ? Math.round((Date.now() - request.started) / 1000) + 's so far' : request.ms + 'ms';
+            out.push('request: ' + request.status + ' (' + age + ') ' + request.url);
+        });
 
         var container = document.getElementById('slides-container');
         out.push(describe('container', container) + (container ? ' class=' + container.className + ' slides=' + container.querySelectorAll('.slide').length : ''));

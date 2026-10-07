@@ -31,7 +31,10 @@ const SIGNATURES = ['author-signature.xml', 'signature1.xml'];
 const MARKER = '<!-- media-bar -->';
 
 export async function buildAssets() {
-    const script = fs.readFileSync(path.join(repoRoot, 'slideshowpure.js'), 'utf8');
+    const source = fs.readFileSync(path.join(repoRoot, 'slideshowpure.js'), 'utf8');
+    // route the bar's requests through mediaBarFetch (see polyfills.src.js)
+    const script = source.replace(/(^|[^.\w])fetch\(/g, '$1mediaBarFetch(');
+    if (script === source) throw new Error('No fetch() calls found in slideshowpure.js to reroute.');
     const { code } = await esbuild.transform(script, { target: JS_TARGET, charset: 'utf8' });
     acorn.parse(code, { ecmaVersion: JS_SYNTAX_LIMIT, sourceType: 'script' });
 

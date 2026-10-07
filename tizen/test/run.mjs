@@ -60,7 +60,7 @@ function page({ css, scripts }) {
 window.ApiClient = {
     isLoggedIn: function () { return !window.signedOut; },
     accessToken: function () { return 'token'; },
-    getCurrentUserId: function () { return 'user1'; },
+    getCurrentUserId: function () { return window.testUserId || 'user1'; },
     serverAddress: function () { return location.origin; },
     serverId: function () { return 'server1'; },
     appName: function () { return 'Test'; },
@@ -99,7 +99,10 @@ function startServer(variants) {
             }
         }
         if (/\/Images\//.test(url.pathname)) return send('image/png', PIXEL);
-        if (/\/web\/avatars\/list\.txt$/.test(url.pathname)) return send('text/plain', '', 404);
+        if (/\/web\/avatars\/list\.txt$/.test(url.pathname)) {
+            if (url.searchParams.get('userId') === 'hang') return undefined; // never answers
+            return send('text/plain', '', 404);
+        }
         if (/\/Views$/.test(url.pathname)) return send('application/json', JSON.stringify({ Items: [] }));
         if (/^\/Items\/?$/.test(url.pathname)) return send('application/json', JSON.stringify({ Items: ITEMS }));
         return send('application/json', '{}', 404);
@@ -253,7 +256,21 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     await context.close();
 }
 
+// A request the server never answers must not leave the bar loading forever.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.addInitScript(() => { window.testUserId = 'hang'; window.mediaBarRequestTimeoutMs = 1500; });
+    await tab.goto(`${base}/lowered/#/home.html`);
+    const started = await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 15000 })
+        .then(() => true, () => false);
+    console.log(`unanswered request: bar ${started ? 'starts after the timeout' : 'never starts'}`);
+    if (!started) failures += 1;
+    await context.close();
+}
+
 await browser.close();
+server.closeAllConnections();
 server.close();
 
 for (const error of errors) console.log(`page error: ${error}`);
