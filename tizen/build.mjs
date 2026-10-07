@@ -1,6 +1,9 @@
 // Adds the media bar to a jellyfin-tizen package.
 //
-//   node build.mjs <jellyfin-tizen.wgt> [output.wgt]
+//   node build.mjs [--debug] <jellyfin-tizen.wgt> [output.wgt]
+//
+// --debug adds an on-screen overlay with script errors and the bar's state,
+// for finding out what goes wrong on a TV.
 //
 // The output is unsigned: Samsung TVs only install packages signed with a
 // certificate that lists the TV, so sign it with your own certificate.
@@ -51,11 +54,12 @@ export async function buildAssets() {
     return { script: code, css, config, polyfills, report };
 }
 
-export function injectIntoIndex(html) {
+export function injectIntoIndex(html, { debug = false } = {}) {
     if (html.includes(MARKER)) throw new Error('This package already contains the media bar.');
     if (!html.includes('</head>')) throw new Error(`${INDEX} has no </head> to inject before.`);
 
     const tags = MARKER +
+        (debug ? '<script src="mediabar/debug.js"></script>' : '') +
         '<link rel="stylesheet" href="mediabar/slideshowpure.css">' +
         '<script defer src="mediabar/polyfills.js"></script>' +
         '<script defer src="mediabar/slideshowpure.js"></script>' +
@@ -65,9 +69,12 @@ export function injectIntoIndex(html) {
 }
 
 async function main() {
-    const [input, output = input?.replace(/\.wgt$/i, '') + '-mediabar.wgt'] = process.argv.slice(2);
+    const args = process.argv.slice(2);
+    const debug = args.includes('--debug');
+    const suffix = debug ? '-mediabar-debug.wgt' : '-mediabar.wgt';
+    const [input, output = input?.replace(/\.wgt$/i, '') + suffix] = args.filter(arg => arg !== '--debug');
     if (!input) {
-        console.error('Usage: node build.mjs <jellyfin-tizen.wgt> [output.wgt]');
+        console.error('Usage: node build.mjs [--debug] <jellyfin-tizen.wgt> [output.wgt]');
         process.exit(1);
     }
 
@@ -76,7 +83,12 @@ async function main() {
 
     const index = zip.getEntry(INDEX);
     if (!index) throw new Error(`${input} has no ${INDEX}; is this a jellyfin-tizen package?`);
-    zip.updateFile(index, Buffer.from(injectIntoIndex(index.getData().toString('utf8'))));
+    zip.updateFile(index, Buffer.from(injectIntoIndex(index.getData().toString('utf8'), { debug })));
+    if (debug) {
+        const overlay = fs.readFileSync(path.join(here, 'debug.js'), 'utf8');
+        acorn.parse(overlay, { ecmaVersion: 5, sourceType: 'script' });
+        zip.addFile(`${ASSET_DIR}/debug.js`, Buffer.from(overlay));
+    }
 
     zip.addFile(`${ASSET_DIR}/polyfills.js`, Buffer.from(assets.polyfills));
     zip.addFile(`${ASSET_DIR}/slideshowpure.js`, Buffer.from(assets.script));
@@ -90,7 +102,7 @@ async function main() {
 
     zip.writeZip(output);
 
-    console.log(`Wrote ${output} (unsigned)`);
+    console.log(`Wrote ${output} (unsigned${debug ? ', with debug overlay' : ''})`);
     for (const selector of assets.report.droppedHas) console.log(`  dropped :has() rule  ${selector}`);
     for (const line of assets.report.unresolvedMath) console.log(`  unresolved math      ${line}`);
     for (const line of assets.report.unknownGap) console.log(`  gap left as is       ${line}`);

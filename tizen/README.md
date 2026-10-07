@@ -13,6 +13,9 @@ npm ci
 node build.mjs Jellyfin-12.z-OblongIcon.wgt
 ```
 
+Add `--debug` for a build that shows script errors and the bar's state in an
+overlay on the TV, which has no console to look at.
+
 The result, `Jellyfin-12.z-OblongIcon-mediabar.wgt`, is **unsigned**. Sign it
 with your own Samsung certificate when installing, as with any sideloaded build.
 
