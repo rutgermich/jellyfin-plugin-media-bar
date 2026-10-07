@@ -50,7 +50,7 @@ const ITEMS = [1, 2, 3, 4].map(n => ({
     UserData: { IsFavorite: false, Played: false }
 }));
 
-function page({ css, scripts }) {
+function page({ css, scripts, themeCss = '' }) {
     return `<!doctype html>
 <html class="layout-tv" style="font-size:${TV.rootFontSize}px"><head><meta charset="utf-8">
 <style>body{margin:0;background:#101010;color:#fff;font-family:sans-serif}.hide{display:none!important}
@@ -81,6 +81,7 @@ ${scripts.map(src => `<script defer src="${src}"></script>`).join('\n')}
 <div class="tabContent pageTabContent is-active" data-index="0"><div class="sections homeSectionsContainer">
 ${'<div class="verticalSection"></div>'.repeat(5)}
 </div></div></div></div>
+<style>${themeCss}</style>
 </body></html>`;
 }
 
@@ -108,6 +109,7 @@ function startServer(variants) {
         if (/\/Views$/.test(url.pathname)) return send('application/json', JSON.stringify({ Items: [] }));
         if (/^\/Items\/?$/.test(url.pathname)) {
             // the first request of a "flaky" client is never answered
+            if (/Token="dead"/.test(request.headers.authorization || '')) return undefined; // never answers
             if (/Token="flaky"/.test(request.headers.authorization || '') && !flakySeen) {
                 flakySeen = true;
                 return undefined;
@@ -201,6 +203,20 @@ const original = {
     css: fs.readFileSync(path.join(repoRoot, 'slideshowpure.css'), 'utf8')
 };
 
+// What a server theme does to the bar, after the rules in a real one
+// (NeutralFin): the stage is stretched under the header, the round buttons get
+// the system button colour and lose their margins, the page gets more padding.
+const THEME_CSS = `
+:root { --appBarHeight: 5rem; }
+#slides-container { margin-top: calc(var(--appBarHeight) * -1); height: calc(100% + var(--appBarHeight)); top: calc(-.5 * var(--appBarHeight)); }
+.detailButton.detail-button, .detailButton.detail-button:not(.btnPlay), .favorite-button { margin: 0 !important; background: buttonface !important; color: inherit !important; }
+.detailButton { padding: .5em !important; }
+.detailButton:not(.btnPlay) { margin: .5em !important; border-radius: 50%; padding: .6em !important; }
+.btnPlay.detailButton { height: 3em; min-width: 10em; margin-right: .5em !important; }
+.skinHeader { height: 5rem !important; }
+#indexPage { padding-top: 6rem !important; }
+` + (process.env.THEME_CSS ? fs.readFileSync(process.env.THEME_CSS, 'utf8') : '');
+
 const server = await startServer({
     original: {
         page: { css: original.css, scripts: ['slideshowpure.js', 'tizen-config.js'] },
@@ -208,6 +224,11 @@ const server = await startServer({
     },
     lowered: {
         page: { css: assets.css, scripts: ['polyfills.js', 'slideshowpure.js', 'tizen-config.js'] },
+        files: { 'polyfills.js': assets.polyfills, 'slideshowpure.js': assets.script, 'tizen-config.js': assets.config }
+    },
+    // what the TV gets: the lowered assets plus the TV-only rules, under a theme
+    tv: {
+        page: { css: `${assets.css}\n${assets.tvCss}`, themeCss: THEME_CSS, scripts: ['polyfills.js', 'slideshowpure.js', 'tizen-config.js'] },
         files: { 'polyfills.js': assets.polyfills, 'slideshowpure.js': assets.script, 'tizen-config.js': assets.config }
     }
 });
@@ -289,6 +310,76 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     const chrome = await tab.evaluate(() => document.querySelectorAll('#slides-container .arrow').length);
     console.log(`titles time out once: bar ${started ? 'loads on the retry' : 'stays empty'}, ${chrome} arrows`);
     if (!started || chrome !== 2) failures += 1;
+    await context.close();
+}
+
+// Under a server theme the text must stay below the header and above the
+// rows, and the buttons must stay apart and readable.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.goto(`${base}/tv/?ss_layout=marquee#/home.html`);
+    await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 20000 });
+    await tab.waitForTimeout(2500);
+    await tab.focus('#slides-container .slide.active .play-button');
+    await tab.waitForTimeout(300);
+    const found = await tab.evaluate(() => {
+        const slide = document.querySelector('#slides-container .slide.active');
+        const box = selector => (selector.nodeType ? selector : slide.querySelector(selector)).getBoundingClientRect();
+        const content = slide.querySelector('.slide-content');
+        const style = getComputedStyle(content);
+        const detail = getComputedStyle(slide.querySelector('.detail-button'));
+        const light = /rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?/.exec(detail.backgroundColor);
+        return {
+            header: box(document.querySelector('.skinHeader')).bottom,
+            rows: box(document.querySelector('.homeSectionsContainer')).top,
+            stageTop: box(document.getElementById('slides-container')).top,
+            logoTop: box('.logo-container').top,
+            buttonsBottom: box('.button-container').bottom,
+            dotsBottom: box(document.querySelector('.dots-container')).bottom,
+            playRight: box('.play-button').right,
+            detailLeft: box('.detail-button').left,
+            detailRight: box('.detail-button').right,
+            favoriteLeft: box('.favorite-button').left,
+            ringRoom: Math.min(parseFloat(style.paddingLeft), parseFloat(style.paddingBottom)),
+            detailIsLight: Number(light[1]) + Number(light[2]) + Number(light[3]) > 380 && light[4] !== '0'
+        };
+    });
+    if (process.env.SCREENSHOT_DIR) await tab.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, 'tv-themed.png') });
+    const problems = [];
+    if (Math.abs(found.stageTop) > 1) problems.push(`stage starts at ${found.stageTop}`);
+    if (found.logoTop < found.header) problems.push(`logo starts at ${found.logoTop}, header ends at ${found.header}`);
+    if (found.buttonsBottom > found.rows || found.dotsBottom > found.rows) problems.push(`buttons end at ${found.buttonsBottom}, dots at ${found.dotsBottom}, rows start at ${found.rows}`);
+    if (found.detailLeft - found.playRight < 10 || found.favoriteLeft - found.detailRight < 10) problems.push('buttons touch');
+    if (found.ringRoom < 19) problems.push(`only ${found.ringRoom}px around the buttons for the focus ring`);
+    if (found.detailIsLight) problems.push('round buttons have a light background');
+    console.log(`server theme: ${problems.length ? problems.join('; ') : `text between header (${Math.round(found.header)}) and rows (${Math.round(found.rows)}): ${Math.round(found.logoTop)}-${Math.round(found.buttonsBottom)}`}`);
+    failures += problems.length;
+    await context.close();
+}
+
+// The second start must show the stored titles without waiting for the
+// server, and ask the server again afterwards.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.addInitScript(() => {
+        window.testToken = localStorage.getItem('testToken') || 'token';
+        window.mediaBarRefreshDelayMs = 500;
+    });
+    await tab.goto(`${base}/lowered/#/home.html`);
+    await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 20000 });
+    await tab.waitForTimeout(500);
+    const stored = await tab.evaluate(() => Object.keys(localStorage).filter(name => name.indexOf('mediaBarCache:') === 0).length);
+    // from here on the server no longer answers requests for titles
+    await tab.evaluate(() => localStorage.setItem('testToken', 'dead'));
+    await tab.reload();
+    const started = await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 4000 })
+        .then(() => true, () => false);
+    await tab.waitForTimeout(1000);
+    const refreshed = await tab.evaluate(() => window.mediaBarRequests.some(request => /^refresh .*Items/.test(request.url)));
+    console.log(`stored titles: ${stored} answers kept, second start ${started ? 'shows the bar without the server' : 'waits for the server'}, ${refreshed ? 'refresh requested' : 'no refresh'}`);
+    if (stored < 2 || !started || !refreshed) failures += 1;
     await context.close();
 }
 

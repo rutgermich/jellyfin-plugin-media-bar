@@ -26,11 +26,14 @@ function replaceChildren() {
 var REQUEST_TIMEOUT_MS = 45000;
 var requests = window.mediaBarRequests = [];
 
-window.mediaBarFetch = function (url, options) {
-    var entry = { url: String(url).replace(/^https?:\/\/[^/]+/, '').slice(0, 70), status: 'pending', started: Date.now() };
+function track(url, label) {
+    var entry = { url: (label || '') + String(url).replace(/^https?:\/\/[^/]+/, '').slice(0, 70), status: 'pending', started: Date.now() };
     requests.push(entry);
     if (requests.length > 8) requests.shift();
+    return entry;
+}
 
+function network(url, options, entry) {
     var settle = function (status) {
         if (entry.status === 'pending') {
             entry.status = status;
@@ -60,5 +63,90 @@ window.mediaBarFetch = function (url, options) {
             settle('failed: ' + (error && error.message));
             reject(error);
         });
+    });
+}
+
+// While the TV's home screen loads, the bar's requests take 15-20 seconds
+// (the same ones take under two on a desktop). So the answers to the requests
+// that decide which titles the bar shows are kept on the TV: the next start
+// uses them at once and asks the server again once the home screen has
+// settled, for the start after that.
+var CACHE_PREFIX = 'mediaBarCache:';
+var CACHE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+var REFRESH_DELAY_MS = 30000;
+var servedFromCache = {};
+
+function cacheKey(url, options) {
+    if (options && options.method && String(options.method).toUpperCase() !== 'GET') return null;
+    if (!/\/Items\?|\/web\/avatars\/list\.txt/.test(String(url))) return null;
+    var user = '';
+    try { user = window.ApiClient.getCurrentUserId() || ''; } catch (error) { /* not signed in yet */ }
+    return CACHE_PREFIX + user + ':' + url;
+}
+
+function readCache(key) {
+    try {
+        var stored = JSON.parse(localStorage.getItem(key) || 'null');
+        if (stored && Date.now() - stored.saved < CACHE_MAX_AGE_MS) return stored;
+    } catch (error) { /* unreadable: treat as absent */ }
+    return null;
+}
+
+function clearCache() {
+    for (var i = localStorage.length - 1; i >= 0; i--) {
+        var name = localStorage.key(i);
+        if (name && name.indexOf(CACHE_PREFIX) === 0) localStorage.removeItem(name);
+    }
+}
+
+function writeCache(key, response) {
+    var isList = /list\.txt/.test(key);
+    // an answer the bar can start from: titles, or "there is no list.txt"
+    if (response.status !== 200 && !(isList && response.status === 404)) return;
+    response.clone().text().then(function (body) {
+        if (!isList && !/"Items"\s*:\s*\[\s*\{/.test(body)) return;
+        var value = JSON.stringify({
+            saved: Date.now(),
+            status: response.status,
+            type: response.headers.get('content-type') || '',
+            body: response.status === 200 ? body : ''
+        });
+        try {
+            localStorage.setItem(key, value);
+        } catch (error) {
+            // storage full: drop the bar's older answers and try once more
+            try { clearCache(); localStorage.setItem(key, value); } catch (again) { /* go without */ }
+        }
+    }).then(null, function () { /* body unreadable: go without */ });
+}
+
+window.mediaBarFetch = function (url, options) {
+    var key = cacheKey(url, options);
+    // Only the first request of a start is answered from storage. Retries and
+    // later visits to the home screen get fresh titles from the server.
+    var stored = key && !servedFromCache[key] ? readCache(key) : null;
+
+    if (stored) {
+        servedFromCache[key] = true;
+        var hit = track(url, 'stored ');
+        hit.status = stored.status;
+        hit.ms = 0;
+        setTimeout(function () {
+            network(url, options, track(url, 'refresh ')).then(function (response) {
+                writeCache(key, response);
+            }, function () { /* keep what is stored */ });
+        }, window.mediaBarRefreshDelayMs || REFRESH_DELAY_MS);
+        return Promise.resolve(new Response(stored.body, {
+            status: stored.status,
+            headers: { 'Content-Type': stored.type || 'application/json' }
+        }));
+    }
+
+    return network(url, options, track(url)).then(function (response) {
+        if (key) {
+            servedFromCache[key] = true;
+            writeCache(key, response);
+        }
+        return response;
     });
 };

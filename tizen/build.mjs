@@ -40,6 +40,8 @@ export async function buildAssets() {
 
     const styles = fs.readFileSync(path.join(repoRoot, 'slideshowpure.css'), 'utf8');
     const { css, report } = await lowerCss(styles, { targets: CSS_TARGET });
+    // TV-only rules, kept apart so the test can compare `css` with the original
+    const tvCss = fs.readFileSync(path.join(here, 'tv-overrides.css'), 'utf8');
 
     const config = fs.readFileSync(path.join(here, 'tizen-config.js'), 'utf8');
     acorn.parse(config, { ecmaVersion: 5, sourceType: 'script' });
@@ -54,7 +56,7 @@ export async function buildAssets() {
     const polyfills = bundle.outputFiles[0].text;
     acorn.parse(polyfills, { ecmaVersion: JS_SYNTAX_LIMIT, sourceType: 'script' });
 
-    return { script: code, css, config, polyfills, report };
+    return { script: code, css, tvCss, config, polyfills, report };
 }
 
 export function injectIntoIndex(html, { debug = false } = {}) {
@@ -95,7 +97,7 @@ async function main() {
 
     zip.addFile(`${ASSET_DIR}/polyfills.js`, Buffer.from(assets.polyfills));
     zip.addFile(`${ASSET_DIR}/slideshowpure.js`, Buffer.from(assets.script));
-    zip.addFile(`${ASSET_DIR}/slideshowpure.css`, Buffer.from(assets.css));
+    zip.addFile(`${ASSET_DIR}/slideshowpure.css`, Buffer.from(`${assets.css}\n${assets.tvCss}`));
     zip.addFile(`${ASSET_DIR}/tizen-config.js`, Buffer.from(assets.config));
 
     // The original signatures no longer match the contents.

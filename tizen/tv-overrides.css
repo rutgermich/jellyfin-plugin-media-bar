@@ -1,0 +1,78 @@
+/* Appended to the lowered stylesheet in the TV build only. Written by hand in
+   syntax Chromium 63 understands; nothing here is lowered.
+
+   Server themes (custom CSS under Dashboard > Branding) load in the TV app
+   too and restyle the bar. On a desktop browser that works out; on the TV's
+   old engine and 27px root font it does not. These rules pin down the parts
+   that broke, with enough weight to win from a theme. */
+
+/* Themes stretch the stage upwards to slide it under the header, which moves
+   everything anchored to its bottom edge up with it. */
+html.layout-tv #slides-container {
+  top: 0 !important;
+  margin-top: 0 !important;
+  height: var(--slideshow-height) !important;
+}
+
+/* The text block sits directly above the home rows instead of at a fixed
+   share of the screen, so a tall logo does not reach into the header. The
+   padding (taken back by the margin) leaves room for the focus ring, which
+   `overflow: hidden` would cut off otherwise. The dots are placed under the
+   padded box, hence the extra 1.25rem in `bottom`. */
+html.layout-tv #slides-container.layout-marquee .slide-content {
+  box-sizing: content-box;
+  bottom: calc(
+    var(--slideshow-height) -
+      var(--slideshow-rows-top, var(--slideshow-content-top)) +
+      var(--slideshow-dots-reserve) + 1.25rem
+  );
+  max-height: calc(
+    var(--slideshow-rows-top, var(--slideshow-content-top)) -
+      var(--slideshow-dots-reserve) - 7.75rem
+  );
+  padding: 0 1.25rem 1.25rem;
+  margin: 0 -1.25rem -1.25rem;
+}
+
+/* `background: buttonface` is dark on a browser that knows `color-scheme`
+   and light grey on the TV, which hid the white icons. */
+html.layout-tv #slides-container .detail-button,
+html.layout-tv #slides-container .favorite-button {
+  /* the lowered build spaces the buttons with margins; themes reset them */
+  margin: 0 0 0 0.8rem !important;
+  padding: 0 !important;
+  border: 2px solid rgba(255, 255, 255, 0.5) !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  color: #fff !important;
+}
+
+html.layout-tv #slides-container .detail-button:focus,
+html.layout-tv #slides-container .favorite-button:focus {
+  border-color: #fff !important;
+  background: #fff !important;
+  color: #000 !important;
+}
+
+html.layout-tv #slides-container .favorite-button.favorited {
+  color: #ff4d4d !important;
+}
+
+/* Sized in px for a desktop; too small from the sofa. */
+html.layout-tv #slides-container .play-button {
+  min-width: 0;
+  padding: 0 1.7rem 0 1.3rem !important;
+  font-size: 1.15rem;
+}
+
+html.layout-tv #slides-container .play-button::before,
+html.layout-tv #slides-container .detail-button::before,
+html.layout-tv #slides-container .favorite-button::before {
+  font-size: 1.7rem;
+}
+
+/* When the text block runs out of room, the logo gives way before the
+   synopsis loses half a line. */
+html.layout-tv #slides-container.layout-marquee .logo-container {
+  flex: 0 100 auto;
+  min-height: 5rem;
+}
