@@ -76,3 +76,38 @@ html.layout-tv #slides-container.layout-marquee .logo-container {
   flex: 0 100 auto;
   min-height: 5rem;
 }
+
+/* The TV's processor cannot keep up with effects a desktop does not notice.
+   Animating a blur or a zoom on a full-screen image redraws it every frame,
+   which made the change of title stutter; a cross-fade is all that is left. */
+html.layout-tv #slides-container .backdrop,
+html.layout-tv #slides-container .logo {
+  animation: none !important;
+  filter: none !important;
+  transition: none !important;
+}
+
+html.layout-tv #slides-container .slide {
+  transition: opacity 0.35s linear;
+  will-change: opacity;
+}
+
+/* The progress line grew by animating `width`, which lays the page out again
+   on every frame. Scaling a full-width line looks the same and is left to
+   the graphics chip. tizen-config.js sets the duration. */
+html.layout-tv #slides-container.layout-marquee .spec-progress {
+  width: 100% !important;
+  transition: none !important;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  will-change: transform;
+}
+
+html.layout-tv #slides-container.layout-marquee .slide.active .spec-progress {
+  animation: media-bar-progress var(--media-bar-interval, 12000ms) linear forwards;
+}
+
+@keyframes media-bar-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}

@@ -24,6 +24,12 @@
         // A TV has no mouse to move away again; a stray pointer event would
         // hold the slideshow on one title for good.
         config.pauseOnHover = false;
+        // Blur-in, slow zoom and a second full-screen backdrop behind the page
+        // are more than the TV can draw smoothly (see tv-overrides.css).
+        config.slideAnimationEnabled = false;
+        config.syncPageBackdrop = false;
+        // duration of the progress line, which is a CSS animation on the TV
+        document.documentElement.style.setProperty('--media-bar-interval', config.shuffleInterval + 'ms');
     }
 
     function applyServerConfig(config, serverConfig) {

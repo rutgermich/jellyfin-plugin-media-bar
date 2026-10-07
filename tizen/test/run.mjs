@@ -378,6 +378,17 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     ).then(() => true, () => false);
     await tab.waitForTimeout(300);
     const second = await shown();
+    // the progress line must run as a transform, not as a changing width
+    const progress = await tab.evaluate(() => {
+        const bar = document.querySelector('#slides-container .slide.active .spec-progress');
+        const style = getComputedStyle(bar);
+        const backdrop = getComputedStyle(document.querySelector('#slides-container .slide.active .backdrop'));
+        return { animation: style.animationName, duration: style.animationDuration, effects: backdrop.animationName + ' ' + backdrop.filter };
+    });
+    if (progress.animation !== 'media-bar-progress' || progress.duration !== '2s' || progress.effects !== 'none none') {
+        console.log(`  progress line: ${JSON.stringify(progress)}`);
+        failures += 1;
+    }
     const follows = second.focusOnIt && /detail-button/.test(second.button);
     console.log(`slideshow: ${moved ? 'moves to the next title by itself' : 'stays on the first title'}, focus ${follows ? 'follows' : 'stays behind'}`);
     if (!moved || !follows) failures += 1;
