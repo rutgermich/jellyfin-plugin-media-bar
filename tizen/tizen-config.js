@@ -102,6 +102,18 @@
         if (target) target.focus();
     }
 
+    // OK on the remote activates the focused button of the bar. Left to the
+    // browser, a button only reacts when the engine turns the key into a
+    // click, which is not something to rely on in every TV's engine.
+    window.addEventListener('keydown', function (event) {
+        if (event.defaultPrevented || !(event.key === 'Enter' || event.keyCode === 13)) return;
+        var target = document.activeElement;
+        var container = document.getElementById('slides-container');
+        if (!target || !container || target.tagName !== 'BUTTON' || !container.contains(target)) return;
+        event.preventDefault();
+        target.click();
+    }, true);
+
     var watching = setInterval(function () {
         var container = document.getElementById('slides-container');
         if (!container) return;

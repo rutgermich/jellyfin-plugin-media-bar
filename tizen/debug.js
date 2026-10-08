@@ -42,6 +42,27 @@
         }
     }, true);
 
+    // What the remote's OK key and the bar's buttons do.
+    function label(element) {
+        if (!element || !element.tagName) return String(element);
+        return element.tagName.toLowerCase() + (element.className ? '.' + String(element.className).trim().split(/\s+/).join('.') : '');
+    }
+    window.addEventListener('keydown', function (event) {
+        if (/Arrow|Left|Right|Up|Down/.test(event.key || '')) return;
+        add('K', ['keydown key=' + event.key + ' code=' + event.keyCode + ' on ' + label(document.activeElement)]);
+    }, true);
+    window.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.keyCode === 13) {
+            add('K', ['after handlers: defaultPrevented=' + event.defaultPrevented]);
+        }
+    }, false);
+    document.addEventListener('click', function (event) {
+        var container = document.getElementById('slides-container');
+        if (container && container.contains(event.target)) {
+            add('C', ['click on ' + label(event.target) + ' (Emby.Page ' + (window.Emby && window.Emby.Page ? 'present' : 'missing') + ')']);
+        }
+    }, true);
+
     window.addEventListener('unhandledrejection', function (event) {
         add('X', ['unhandled rejection:', event.reason]);
     });

@@ -395,6 +395,31 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     await context.close();
 }
 
+// OK on the remote must activate the focused button.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.addInitScript(() => {
+        window.activated = [];
+        window.Emby = { Page: { show: url => window.activated.push('details ' + url) } };
+    });
+    await tab.goto(`${base}/tv/?ss_layout=marquee#/home.html`);
+    await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 20000 });
+    await tab.evaluate(() => {
+        window.slideshowPure.ApiUtils.playItem = id => { window.activated.push('play ' + id); return Promise.resolve(true); };
+        window.slideshowPure.ApiUtils.toggleFavorite = id => { window.activated.push('favorite ' + id); return Promise.resolve(true); };
+    });
+    for (const name of ['play-button', 'detail-button', 'favorite-button']) {
+        await tab.focus(`#slides-container .slide.active .${name}`);
+        await tab.keyboard.press('Enter');
+        await tab.waitForTimeout(200);
+    }
+    const activated = await tab.evaluate(() => window.activated);
+    console.log(`OK on the buttons: ${activated.length}/3 activated ${JSON.stringify(activated)}`);
+    if (activated.length !== 3) failures += 1;
+    await context.close();
+}
+
 // The second start must show the stored titles without waiting for the
 // server, and ask the server again afterwards.
 {
