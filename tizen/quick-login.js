@@ -48,22 +48,37 @@
         form.dispatchEvent(event);
     }
 
+    function log(message) {
+        console.log('Media Bar quick login: ' + message);
+    }
+
     document.addEventListener('click', function (event) {
         if (passing) return;
         var card = event.target && event.target.closest ? event.target.closest('#divUsers .card') : null;
         var content = card ? card.querySelector('.cardContent') : null;
         var page = card ? card.closest('.page') || document : null;
         var api = window.ApiClient;
-        if (!content || !api || !page.querySelector('.manualLoginForm')) return;
+        if (!content) return;
+        if (!api || !page.querySelector('.manualLoginForm')) {
+            log('not on a sign-in page (ApiClient ' + (api ? 'present' : 'missing') + ')');
+            return;
+        }
 
         var userId = content.getAttribute('data-userid');
         var name = content.getAttribute('data-username');
         if (!userId || userId === 'manual' || !name) return;
         // a server that still says which users have no password is handled by the page
-        if (content.getAttribute('data-haspw') === 'false') return;
+        if (content.getAttribute('data-haspw') === 'false') {
+            log('server says ' + name + ' has no password');
+            return;
+        }
 
         var key = storageKey(api, userId);
-        if (knownToNeedPassword(key)) return;
+        if (knownToNeedPassword(key)) {
+            log(name + ' is known to need a password');
+            return;
+        }
+        log('trying ' + name + ' without a password');
 
         event.preventDefault();
         event.stopPropagation();
@@ -78,13 +93,15 @@
             },
             body: JSON.stringify({ Username: name, Pw: '' })
         }).then(function (response) {
+            log(name + ': server answered ' + response.status);
             if (response.ok) {
                 signInWithoutPassword(page, name);
                 return;
             }
             if (response.status === 401 || response.status === 403) rememberNeedsPassword(key);
             passOn(card);
-        }, function () {
+        }, function (error) {
+            log(name + ': request failed (' + (error && error.message) + ')');
             passOn(card);
         });
     }, true);
