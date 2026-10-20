@@ -1,9 +1,67 @@
 // Browser APIs the media bar uses that Chromium 63/69 lacks. Bundled by
 // build.mjs and loaded before slideshowpure.js.
-import ResizeObserverPolyfill from 'resize-observer-polyfill';
 
-if (typeof window.ResizeObserver === 'undefined') {
-    window.ResizeObserver = ResizeObserverPolyfill;
+// ResizeObserver (Chromium 64+). The common polyfill watches every change to
+// the page and measures the observed elements after each one; on the home
+// screen, where images load into the rows while scrolling, that meant forced
+// layouts during the scroll. The bar only needs to hear about size changes
+// eventually, so this one looks every 400 ms, and not while scrolling.
+var lastScroll = 0;
+window.addEventListener('scroll', function () { lastScroll = Date.now(); }, { passive: true });
+
+function PollingResizeObserver(callback) {
+    this.callback = callback;
+    this.targets = [];
+    this.timer = null;
+}
+
+PollingResizeObserver.prototype.observe = function (element) {
+    for (var i = 0; i < this.targets.length; i++) {
+        if (this.targets[i].element === element) return;
+    }
+    // -1 so the first look reports the element, as a native observer does
+    this.targets.push({ element: element, width: -1, height: -1 });
+    this.start();
+};
+
+PollingResizeObserver.prototype.unobserve = function (element) {
+    this.targets = this.targets.filter(function (target) { return target.element !== element; });
+    if (!this.targets.length) this.stop();
+};
+
+PollingResizeObserver.prototype.disconnect = function () {
+    this.targets = [];
+    this.stop();
+};
+
+PollingResizeObserver.prototype.start = function () {
+    var observer = this;
+    if (observer.timer) return;
+    observer.timer = setInterval(function () { observer.check(); }, 400);
+    setTimeout(function () { observer.check(); }, 0);
+};
+
+PollingResizeObserver.prototype.stop = function () {
+    clearInterval(this.timer);
+    this.timer = null;
+};
+
+PollingResizeObserver.prototype.check = function () {
+    if (document.hidden || Date.now() - lastScroll < 250) return;
+    var entries = [];
+    this.targets.forEach(function (target) {
+        var width = target.element.offsetWidth;
+        var height = target.element.offsetHeight;
+        if (width === target.width && height === target.height) return;
+        target.width = width;
+        target.height = height;
+        entries.push({ target: target.element, contentRect: { width: width, height: height } });
+    });
+    if (entries.length) this.callback(entries, this);
+};
+
+if (typeof window.ResizeObserver === 'undefined' || window.mediaBarForcePolyfills) {
+    window.ResizeObserver = PollingResizeObserver;
 }
 
 function replaceChildren() {

@@ -159,6 +159,33 @@
         reloadWhenEmpty(bar);
     }, 1000);
 
+    // Scrolled down to the rows, the bar is out of view but kept animating
+    // its progress line (a new frame on every refresh) and changing title
+    // every few seconds, which competes with the scrolling on a TV. Hold both
+    // until it comes back into view.
+    var offscreen = false;
+    var scrollPending = false;
+    function holdWhenOffscreen() {
+        scrollPending = false;
+        var bar = window.slideshowPure;
+        var container = document.getElementById('slides-container');
+        if (!bar || !bar.STATE || !container) return;
+        var now = (window.pageYOffset || 0) >= window.innerHeight * 0.9;
+        if (now === offscreen) return;
+        offscreen = now;
+        container.classList.toggle('mb-offscreen', now);
+        var state = bar.STATE.slideshow;
+        var timer = state.slideInterval;
+        if (!timer) return;
+        if (now) timer.pause();
+        else if (!state.isPaused && !state.isVideoPlaying) timer.resume();
+    }
+    window.addEventListener('scroll', function () {
+        if (scrollPending) return;
+        scrollPending = true;
+        requestAnimationFrame(holdWhenOffscreen);
+    }, { passive: true });
+
     // When the home screen opens, jellyfin-web focuses the first tile of the
     // first row and scrolls down to it, which pushes the bar out of view.
     // Focus the active header tab ("Home") instead and stay at the top. Only

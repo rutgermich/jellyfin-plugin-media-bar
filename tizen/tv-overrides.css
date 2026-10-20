@@ -111,3 +111,14 @@ html.layout-tv #slides-container.layout-marquee .slide.active .spec-progress {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
+
+/* Scrolled out of view (tizen-config.js): the progress line waits. */
+html.layout-tv #slides-container.mb-offscreen .spec-progress {
+  animation-play-state: paused;
+}
+
+/* The theme spaces the tab icons with padding-inline-end, which Chromium 63
+   does not know, so icon and text touched. */
+html.layout-tv .headerTabs .emby-tab-button::before {
+  padding-right: 0.5ch;
+}

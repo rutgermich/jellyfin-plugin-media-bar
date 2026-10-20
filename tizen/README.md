@@ -73,6 +73,9 @@ Samsung certificate for that TV; tools such as Apps2Samsung take care of that.
   and the bar is in view, instead of the first tile of the first row.
 - **Follows the signed-in user.** After switching user the bar loads the new
   user's titles, from the libraries that user can see.
+- **Holds still when scrolled away.** Once you scroll down to the rows, the
+  bar stops its progress line and stays on the same title until it is back
+  in view, so the TV has more room for scrolling.
 - **Server themes still apply.** Custom CSS set under Dashboard > Branding
   loads in the TV app as well. The build keeps the bar's position and buttons
   intact under a theme (tested with NeutralFin); colours from the theme, such
@@ -103,7 +106,8 @@ Samsung TVs run old Chromium versions (Tizen 5.0 → 63, Tizen 5.5 → 69), so t
 bar's assets are lowered before they go into `www/mediabar/`:
 
 - `slideshowpure.js` is transpiled with esbuild; `polyfills.src.js` adds
-  `ResizeObserver` and `replaceChildren`.
+  `replaceChildren` and a light `ResizeObserver` that checks sizes every
+  400 ms instead of after every change to the page.
 - `slideshowpure.css` goes through `lower-css.mjs`. A TV app always renders at
   1920×1080 with a 27px root font, so `clamp()`/`min()`/`max()` are resolved to
   pixels at build time, flex `gap` becomes margins, `:focus-visible` becomes

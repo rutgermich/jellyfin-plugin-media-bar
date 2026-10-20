@@ -164,6 +164,22 @@
         return out;
     }
 
+    // Frame rate over the last two seconds, and the slowest frame in it.
+    var frames = [];
+    function countFrame(time) {
+        frames.push(time);
+        while (frames.length && time - frames[0] > 2000) frames.shift();
+        requestAnimationFrame(countFrame);
+    }
+    requestAnimationFrame(countFrame);
+    function frameRate() {
+        if (frames.length < 2) return 'frames: -';
+        var slowest = 0;
+        for (var i = 1; i < frames.length; i++) slowest = Math.max(slowest, frames[i] - frames[i - 1]);
+        var fps = (frames.length - 1) * 1000 / (frames[frames.length - 1] - frames[0]);
+        return 'frames: ' + Math.round(fps) + ' fps, slowest ' + Math.round(slowest) + 'ms (last 2 s), scrollY ' + Math.round(window.pageYOffset);
+    }
+
     function state() {
         var out = [];
         var chrome = /Chrom(?:e|ium)\/([\d.]+)/.exec(navigator.userAgent);
@@ -172,6 +188,7 @@
             ', viewport ' + window.innerWidth + 'x' + window.innerHeight +
             ', root font ' + style(document.documentElement, 'fontSize') +
             ', html.' + document.documentElement.className.replace(/\s+/g, '.'));
+        out.push(frameRate());
         out.push('page: ' + location.hash.slice(0, 60) +
             ', tab=' + (document.querySelector('.emby-tab-button-active') ? document.querySelector('.emby-tab-button-active').getAttribute('data-index') : 'none') +
             ', rows=' + rect(document.querySelector('.homeSectionsContainer')));

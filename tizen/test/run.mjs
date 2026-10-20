@@ -578,6 +578,39 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     await context.close();
 }
 
+// With the TV's own ResizeObserver stand-in (Chromium 63 has none), the dots
+// still end up under the text, and scrolled away the bar holds its timer.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.addInitScript(() => { window.mediaBarForcePolyfills = true; });
+    await tab.goto(`${base}/tv/?ss_layout=marquee&ss_shuffleInterval=2000#/home.html`);
+    await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 20000 });
+    await tab.waitForTimeout(1500);
+    const layout = await tab.evaluate(() => {
+        const box = el => el.getBoundingClientRect();
+        const content = document.querySelector('#slides-container .slide.active .slide-content');
+        const dots = document.querySelector('#slides-container .dots-container');
+        return { polyfill: window.ResizeObserver.name, dotsBelow: box(dots).top >= box(content).bottom - 1, rows: box(document.querySelector('.homeSectionsContainer')).top, dotsBottom: box(dots).bottom };
+    });
+    await tab.evaluate(() => window.scrollTo(0, 2000));
+    await tab.waitForTimeout(400);
+    const held = await tab.evaluate(() => {
+        const timer = window.slideshowPure.STATE.slideshow.slideInterval;
+        return { cls: document.getElementById('slides-container').classList.contains('mb-offscreen'), running: Boolean(timer.timerId || timer.resumeId), title: document.querySelector('#slides-container .slide.active').dataset.itemId };
+    });
+    await tab.waitForTimeout(3000);
+    const after = await tab.evaluate(() => document.querySelector('#slides-container .slide.active').dataset.itemId);
+    await tab.evaluate(() => window.scrollTo(0, 0));
+    await tab.waitForTimeout(400);
+    const resumed = await tab.evaluate(() => { const t = window.slideshowPure.STATE.slideshow.slideInterval; return Boolean(t.timerId || t.resumeId); });
+    const ok = layout.polyfill === 'PollingResizeObserver' && layout.dotsBelow && layout.dotsBottom <= layout.rows &&
+        held.cls && !held.running && after === held.title && resumed;
+    console.log(`resize stand-in and hold: ${ok ? 'dots placed, bar holds while scrolled away and resumes' : JSON.stringify({ layout, held, after, resumed })}`);
+    if (!ok) failures += 1;
+    await context.close();
+}
+
 // The second start must show the stored titles without waiting for the
 // server, and ask the server again afterwards.
 {
