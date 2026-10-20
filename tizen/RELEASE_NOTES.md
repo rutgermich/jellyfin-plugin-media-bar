@@ -2,7 +2,7 @@ The Jellyfin app for Samsung TVs with the Media Bar built in. The TV app ships i
 
 **Install `Jellyfin-12.z-OblongIcon-mediabar.wgt`.** The `-debug` file is the same build with an on-screen overlay for troubleshooting.
 
-Both files are unsigned: install them like any sideloaded jellyfin-tizen build, with a tool that signs for your TV (Apps2Samsung was used for testing) or with Tizen Studio and your own certificate. The package replaces an installed Jellyfin TV app.
+Both files are signed like the jellyfin-tizen-builds packages (same public developer certificate), so a TV in developer mode installs them directly, for example with Apps2Samsung. They replace a jellyfin-tizen-builds Jellyfin app without uninstalling; a Jellyfin app installed with another certificate has to be removed on the TV first.
 
 Good to know:
 

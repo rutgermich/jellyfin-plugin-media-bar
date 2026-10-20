@@ -26,16 +26,22 @@ the app is changed.
 
 ## Install
 
-The packages are **unsigned**. A Samsung TV only installs packages signed with
-a certificate that lists that TV, so they are installed the same way as any
-other sideloaded jellyfin-tizen build: with a tool that signs and installs in
-one go (for example Apps2Samsung, which was used for testing), or with Tizen
-Studio and your own Samsung certificate. The
+The packages are signed the same way as the
+[jellyfin-tizen-builds](https://github.com/jeppevinkel/jellyfin-tizen-builds)
+packages, with the same public "Jellyfin" developer certificate (see
+`signing/README.md`). A TV in developer mode installs them like any other
+sideloaded jellyfin-tizen build, for example with Apps2Samsung (used for
+testing) or with `sdb install`. The
 [jellyfin-tizen](https://github.com/jellyfin/jellyfin-tizen) README describes
 the developer-mode setup on the TV.
 
-The package has the same app id as the normal Jellyfin TV app, so it replaces
-an existing install; you sign in again afterwards.
+The package has the same app id and certificate as the jellyfin-tizen-builds
+packages, so it replaces one of those without uninstalling, and the other way
+round. A Jellyfin app installed some other way (a different certificate) has to
+be removed on the TV first.
+
+Tizen 7 and newer TVs (2023 models on) only install packages signed with a
+Samsung certificate for that TV; tools such as Apps2Samsung take care of that.
 
 ## What to expect
 
@@ -114,7 +120,9 @@ bar's assets are lowered before they go into `www/mediabar/`:
   adds a 45 second timeout and keeps the answers that decide which titles are
   shown in `localStorage`. A start uses the stored answer at once and asks the
   server again 30 seconds later, for the next start.
-- The package's signature files are removed, because they no longer match.
+- The package is signed again (`sign.mjs`), because the original signatures
+  no longer match. `test/signature.mjs` checks that signing the untouched
+  original gives exactly the signature files `tizen package` made.
 
 ## Test
 

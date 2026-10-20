@@ -5,8 +5,8 @@
 // --debug adds an on-screen overlay with script errors and the bar's state,
 // for finding out what goes wrong on a TV.
 //
-// The output is unsigned: Samsung TVs only install packages signed with a
-// certificate that lists the TV, so sign it with your own certificate.
+// The output is signed like the jellyfin-tizen-builds packages (see sign.mjs),
+// so it installs on a TV in developer mode and replaces those builds.
 
 import fs from 'fs';
 import path from 'path';
@@ -15,6 +15,7 @@ import AdmZip from 'adm-zip';
 import * as acorn from 'acorn';
 import esbuild from 'esbuild';
 import { lowerCss } from './lower-css.mjs';
+import { signPackage, SIGNATURE_FILES } from './sign.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..');
@@ -27,7 +28,6 @@ const JS_SYNTAX_LIMIT = 2018;
 
 const ASSET_DIR = 'www/mediabar';
 const INDEX = 'www/index.html';
-const SIGNATURES = ['author-signature.xml', 'signature1.xml'];
 const MARKER = '<!-- media-bar -->';
 
 export async function buildAssets() {
@@ -108,14 +108,18 @@ async function main() {
     zip.addFile(`${ASSET_DIR}/quick-login.js`, Buffer.from(assets.quickLogin));
     zip.addFile(`${ASSET_DIR}/switch-user.js`, Buffer.from(assets.switchUser));
 
-    // The original signatures no longer match the contents.
-    for (const name of SIGNATURES) {
+    // The original signatures no longer match the contents: sign again, with
+    // the same public test certificates (see sign.mjs).
+    for (const name of SIGNATURE_FILES) {
         if (zip.getEntry(name)) zip.deleteFile(name);
     }
+    const files = zip.getEntries().filter(entry => !entry.isDirectory).map(entry => [entry.entryName, entry.getData()]);
+    const signatures = signPackage(files);
+    for (const name of SIGNATURE_FILES) zip.addFile(name, Buffer.from(signatures[name]));
 
     zip.writeZip(output);
 
-    console.log(`Wrote ${output} (unsigned${debug ? ', with debug overlay' : ''})`);
+    console.log(`Wrote ${output} (signed${debug ? ', with debug overlay' : ''})`);
     for (const selector of assets.report.droppedHas) console.log(`  dropped :has() rule  ${selector}`);
     for (const line of assets.report.unresolvedMath) console.log(`  unresolved math      ${line}`);
     for (const line of assets.report.unknownGap) console.log(`  gap left as is       ${line}`);

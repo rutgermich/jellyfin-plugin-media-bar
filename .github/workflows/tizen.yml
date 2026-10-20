@@ -61,6 +61,7 @@ jobs:
         run: |
           node build.mjs "$BASE_NAME.wgt"
           node build.mjs --debug "$BASE_NAME.wgt"
+          node test/signature.mjs "$BASE_NAME.wgt" "$BASE_NAME-mediabar.wgt" "$BASE_NAME-mediabar-debug.wgt"
 
       - name: Publish
         env:
