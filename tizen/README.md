@@ -55,6 +55,11 @@ an existing install; you sign in again afterwards.
 - **Remote control:** left and right move between the buttons and on to the
   previous or next title, OK activates the focused button. When the bar moves
   on by itself, focus stays on the same button of the new title.
+- **Users without a password sign in at once.** Recent Jellyfin servers no
+  longer tell the app which users have a password, so it asks every user for
+  one. The build first tries an empty password when you pick a user. For a user
+  who does have a password this costs one failed sign-in the first time on that
+  TV; after that the TV remembers it and goes straight to the password form.
 - **Server themes still apply.** Custom CSS set under Dashboard > Branding
   loads in the TV app as well. The build keeps the bar's position and buttons
   intact under a theme (tested with NeutralFin); colours from the theme, such
@@ -98,6 +103,8 @@ bar's assets are lowered before they go into `www/mediabar/`:
   ones (trailers, hover pause and motion effects off), starts the bar once
   someone is signed in, retries when no titles could be loaded and keeps the
   remote's focus on the title that is showing.
+- `quick-login.js` signs in users without a password when they are picked on
+  the sign-in page (see above), through the page's own sign-in form.
 - The bar's requests go through `mediaBarFetch` (in `polyfills.src.js`), which
   adds a 45 second timeout and keeps the answers that decide which titles are
   shown in `localStorage`. A start uses the stored answer at once and asks the
@@ -111,7 +118,8 @@ original and the lowered assets, in all three layouts and with the settings
 panel open, and fails when any element ends up somewhere else. It checks the
 lowered CSS against Chromium 63 support data, and covers late sign-in,
 requests that are never answered, a server theme, the slideshow moving on with
-focus following, and the stored titles.
+focus following, OK on the buttons, signing in without a password, and the
+stored titles.
 
 It does not run Chromium 63 itself, so it cannot replace a test on a TV.
 

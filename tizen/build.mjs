@@ -45,6 +45,8 @@ export async function buildAssets() {
 
     const config = fs.readFileSync(path.join(here, 'tizen-config.js'), 'utf8');
     acorn.parse(config, { ecmaVersion: 5, sourceType: 'script' });
+    const quickLogin = fs.readFileSync(path.join(here, 'quick-login.js'), 'utf8');
+    acorn.parse(quickLogin, { ecmaVersion: 5, sourceType: 'script' });
 
     const bundle = await esbuild.build({
         entryPoints: [path.join(here, 'polyfills.src.js')],
@@ -56,7 +58,7 @@ export async function buildAssets() {
     const polyfills = bundle.outputFiles[0].text;
     acorn.parse(polyfills, { ecmaVersion: JS_SYNTAX_LIMIT, sourceType: 'script' });
 
-    return { script: code, css, tvCss, config, polyfills, report };
+    return { script: code, css, tvCss, config, quickLogin, polyfills, report };
 }
 
 export function injectIntoIndex(html, { debug = false } = {}) {
@@ -68,7 +70,8 @@ export function injectIntoIndex(html, { debug = false } = {}) {
         '<link rel="stylesheet" href="mediabar/slideshowpure.css">' +
         '<script defer src="mediabar/polyfills.js"></script>' +
         '<script defer src="mediabar/slideshowpure.js"></script>' +
-        '<script defer src="mediabar/tizen-config.js"></script>';
+        '<script defer src="mediabar/tizen-config.js"></script>' +
+        '<script defer src="mediabar/quick-login.js"></script>';
 
     return html.replace('</head>', `${tags}</head>`);
 }
@@ -99,6 +102,7 @@ async function main() {
     zip.addFile(`${ASSET_DIR}/slideshowpure.js`, Buffer.from(assets.script));
     zip.addFile(`${ASSET_DIR}/slideshowpure.css`, Buffer.from(`${assets.css}\n${assets.tvCss}`));
     zip.addFile(`${ASSET_DIR}/tizen-config.js`, Buffer.from(assets.config));
+    zip.addFile(`${ASSET_DIR}/quick-login.js`, Buffer.from(assets.quickLogin));
 
     // The original signatures no longer match the contents.
     for (const name of SIGNATURES) {

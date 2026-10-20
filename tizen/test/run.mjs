@@ -86,6 +86,38 @@ ${'<div class="verticalSection"></div>'.repeat(5)}
 }
 
 let flakySeen = false;
+const authAttempts = [];
+
+// The parts of jellyfin-web's sign-in page that quick-login.js works with:
+// user cards that show the password form when picked, and the manual form.
+const LOGIN_PAGE = `<!doctype html><html><head><meta charset="utf-8">
+<script>
+window.ApiClient = {
+    serverAddress: function () { return location.origin; }, serverId: function () { return 'server1'; },
+    appName: function () { return 'Test'; }, appVersion: function () { return '1'; },
+    deviceName: function () { return 'Test'; }, deviceId: function () { return 'device1'; }
+};
+window.events = [];
+</script>
+<script defer src="quick-login.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelector('#divUsers').addEventListener('click', function (event) {
+        var content = event.target.closest('.card').querySelector('.cardContent');
+        events.push('password form for ' + content.getAttribute('data-username'));
+    });
+    document.querySelector('.manualLoginForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        events.push('sign in ' + document.querySelector('#txtManualName').value + ' with "' + document.querySelector('#txtManualPassword').value + '"');
+    });
+});
+</script></head><body><div class="page">
+<div id="divUsers">
+<button type="button" class="card" id="nine"><div class="cardContent" data-haspw="true" data-username="Nine" data-userid="nine"></div></button>
+<button type="button" class="card" id="rutger"><div class="cardContent" data-haspw="true" data-username="Rutger" data-userid="rutger"></div></button>
+</div>
+<form class="manualLoginForm"><input id="txtManualName"><input id="txtManualPassword" type="password"></form>
+</div></body></html>`;
 
 function startServer(variants) {
     const server = http.createServer((request, response) => {
@@ -95,6 +127,20 @@ function startServer(variants) {
             response.end(body);
         };
 
+        if (url.pathname === '/Users/AuthenticateByName' && request.method === 'POST') {
+            let body = '';
+            request.on('data', chunk => { body += chunk; });
+            request.on('end', () => {
+                const { Username, Pw } = JSON.parse(body || '{}');
+                authAttempts.push(Username);
+                // "Nine" has no password, "Rutger" has one
+                if (Username === 'Nine' && Pw === '') return send('application/json', JSON.stringify({ AccessToken: 't', User: { Id: 'nine' } }));
+                return send('application/json', '{}', 401);
+            });
+            return undefined;
+        }
+        if (url.pathname === '/login/') return send('text/html', LOGIN_PAGE);
+        if (url.pathname === '/login/quick-login.js') return send('text/javascript', assets.quickLogin);
         for (const [name, variant] of Object.entries(variants)) {
             if (url.pathname === `/${name}/`) return send('text/html', page(variant.page));
             for (const [file, body] of Object.entries(variant.files)) {
@@ -417,6 +463,28 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     const activated = await tab.evaluate(() => window.activated);
     console.log(`OK on the buttons: ${activated.length}/3 activated ${JSON.stringify(activated)}`);
     if (activated.length !== 3) failures += 1;
+    await context.close();
+}
+
+// Picking a user without a password signs in at once; a user with one gets
+// the password form, and is not tried with an empty password a second time.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.goto(`${base}/login/`);
+    const pick = async id => {
+        await tab.click(`#${id}`);
+        await tab.waitForTimeout(400);
+    };
+    await pick('nine');
+    await pick('rutger');
+    await pick('rutger');
+    const events = await tab.evaluate(() => window.events);
+    const expected = ['sign in Nine with ""', 'password form for Rutger', 'password form for Rutger'];
+    const triedRutger = authAttempts.filter(name => name === 'Rutger').length;
+    const ok = JSON.stringify(events) === JSON.stringify(expected) && triedRutger === 1;
+    console.log(`quick sign-in: ${ok ? 'user without password signs in at once, others get the password form' : JSON.stringify({ events, triedRutger })}`);
+    if (!ok) failures += 1;
     await context.close();
 }
 
