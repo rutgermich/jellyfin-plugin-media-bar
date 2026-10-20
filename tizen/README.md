@@ -60,6 +60,9 @@ an existing install; you sign in again afterwards.
   one. The build first tries an empty password when you pick a user. For a user
   who does have a password this costs one failed sign-in the first time on that
   TV; after that the TV remembers it and goes straight to the password form.
+- **Switch user in one press.** A button next to the user button at the top
+  right signs out and goes to the sign-in page, the same as Sign out at the
+  bottom of the user menu.
 - **Server themes still apply.** Custom CSS set under Dashboard > Branding
   loads in the TV app as well. The build keeps the bar's position and buttons
   intact under a theme (tested with NeutralFin); colours from the theme, such
@@ -105,6 +108,8 @@ bar's assets are lowered before they go into `www/mediabar/`:
   remote's focus on the title that is showing.
 - `quick-login.js` signs in users without a password when they are picked on
   the sign-in page (see above), through the page's own sign-in form.
+- `switch-user.js` adds the switch-user button to the header; it uses
+  jellyfin-web's own sign-out.
 - The bar's requests go through `mediaBarFetch` (in `polyfills.src.js`), which
   adds a 45 second timeout and keeps the answers that decide which titles are
   shown in `localStorage`. A start uses the stored answer at once and asks the
@@ -118,8 +123,8 @@ original and the lowered assets, in all three layouts and with the settings
 panel open, and fails when any element ends up somewhere else. It checks the
 lowered CSS against Chromium 63 support data, and covers late sign-in,
 requests that are never answered, a server theme, the slideshow moving on with
-focus following, OK on the buttons, signing in without a password, and the
-stored titles.
+focus following, OK on the buttons, signing in without a password, the switch-user button and
+the stored titles.
 
 It does not run Chromium 63 itself, so it cannot replace a test on a TV.
 

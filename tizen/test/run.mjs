@@ -86,6 +86,19 @@ ${'<div class="verticalSection"></div>'.repeat(5)}
 }
 
 let flakySeen = false;
+
+// jellyfin-web's header as libraryMenu builds it, with the user button hidden
+// until someone is signed in.
+const HEADER_PAGE = `<!doctype html><html lang="nl"><head><meta charset="utf-8">
+<style>.hide{display:none!important}</style>
+<script>window.signedOut = 0; window.Dashboard = { logout: function () { window.signedOut += 1; } };</script>
+<script defer src="switch-user.js"></script></head><body>
+<div class="skinHeader"><div class="headerTop"><div class="headerRight">
+<button class="headerSyncButton headerButton headerButtonRight hide"></button>
+<button type="button" class="headerButton headerButtonRight headerSearchButton"></button>
+<button class="headerButton headerButtonRight headerUserButton hide"></button>
+<div class="currentTimeText hide"></div>
+</div></div></div></body></html>`;
 const authAttempts = [];
 
 // The parts of jellyfin-web's sign-in page that quick-login.js works with:
@@ -140,6 +153,8 @@ function startServer(variants) {
             return undefined;
         }
         if (url.pathname === '/login/') return send('text/html', LOGIN_PAGE);
+        if (url.pathname === '/header/') return send('text/html', HEADER_PAGE);
+        if (url.pathname === '/header/switch-user.js') return send('text/javascript', assets.switchUser);
         if (url.pathname === '/login/quick-login.js') return send('text/javascript', assets.quickLogin);
         for (const [name, variant] of Object.entries(variants)) {
             if (url.pathname === `/${name}/`) return send('text/html', page(variant.page));
@@ -484,6 +499,28 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     const triedRutger = authAttempts.filter(name => name === 'Rutger').length;
     const ok = JSON.stringify(events) === JSON.stringify(expected) && triedRutger === 1;
     console.log(`quick sign-in: ${ok ? 'user without password signs in at once, others get the password form' : JSON.stringify({ events, triedRutger })}`);
+    if (!ok) failures += 1;
+    await context.close();
+}
+
+// The switch-user button sits before the user button, shows up with it, and
+// signs out through jellyfin-web.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.goto(`${base}/header/`);
+    await tab.waitForSelector('.headerSwitchUserButton', { state: 'attached', timeout: 5000 });
+    const hiddenBefore = await tab.evaluate(() => document.querySelector('.headerSwitchUserButton').classList.contains('hide'));
+    await tab.evaluate(() => document.querySelector('.headerUserButton').classList.remove('hide'));
+    await tab.waitForSelector('.headerSwitchUserButton', { state: 'visible', timeout: 2000 });
+    const found = await tab.evaluate(() => {
+        const button = document.querySelector('.headerSwitchUserButton');
+        return { next: button.nextElementSibling.className, label: button.title };
+    });
+    await tab.click('.headerSwitchUserButton');
+    const signedOut = await tab.evaluate(() => window.signedOut);
+    const ok = hiddenBefore && /headerUserButton/.test(found.next) && found.label === 'Wissel gebruiker' && signedOut === 1;
+    console.log(`switch user: ${ok ? 'button next to the user button signs out' : JSON.stringify({ hiddenBefore, found, signedOut })}`);
     if (!ok) failures += 1;
     await context.close();
 }
