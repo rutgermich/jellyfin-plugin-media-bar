@@ -79,7 +79,8 @@ ${scripts.map(src => `<script defer src="${src}"></script>`).join('\n')}
 <div class="mainAnimatedPages skinBody"><div class="page hide"></div></div>
 <div class="skinBody"><div id="indexPage" class="page homePage" style="padding-top:4rem">
 <div class="tabContent pageTabContent is-active" data-index="0"><div class="sections homeSectionsContainer">
-${'<div class="verticalSection"></div>'.repeat(5)}
+<div class="verticalSection"><button class="card" id="firstTile">Tile</button></div>
+${'<div class="verticalSection"></div>'.repeat(4)}
 </div></div></div></div>
 <style>${themeCss}</style>
 </body></html>`;
@@ -537,6 +538,42 @@ for (const layout of ['plate', 'marquee', 'classic']) {
     const ok = hiddenBefore && /headerUserButton/.test(found.next) && found.label === 'Wissel gebruiker' && result.signedOut === 2 &&
         JSON.stringify(result.shown) === JSON.stringify(['login server1', 'selectserver']) && result.focusStyle;
     console.log(`switch user: ${ok ? 'signs out straight to the sign-in page, with the header focus style' : JSON.stringify({ hiddenBefore, found, result })}`);
+    if (!ok) failures += 1;
+    await context.close();
+}
+
+// When the signed-in user changes, the bar starts again for the new user.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.goto(`${base}/tv/?ss_layout=marquee#/home.html`);
+    await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 20000 });
+    await tab.waitForTimeout(1500);
+    await tab.evaluate(() => { window.signedOut = true; });
+    await tab.waitForTimeout(2500);
+    const cleared = await tab.evaluate(() => !document.querySelector('#slides-container .slide'));
+    await tab.evaluate(() => { window.testUserId = 'user2'; window.signedOut = false; });
+    const restarted = await tab.waitForFunction(
+        () => window.slideshowPure.STATE.jellyfinData.userId === 'user2' && document.querySelector('#slides-container .slide.active'),
+        null, { timeout: 15000 }
+    ).then(() => true, () => false);
+    console.log(`user change: bar ${cleared ? 'cleared on sign-out' : 'kept after sign-out'}, ${restarted ? 'restarted for the new user' : 'not restarted'}`);
+    if (!cleared || !restarted) failures += 1;
+    await context.close();
+}
+
+// When the home screen focuses its first tile on opening, focus goes to the
+// header tab instead and the page stays at the top.
+{
+    const context = await browser.newContext({ viewport: { width: TV.width, height: TV.height } });
+    const tab = await context.newPage();
+    await tab.goto(`${base}/tv/?ss_layout=marquee#/home.html`);
+    await tab.waitForSelector('#slides-container .slide.active .button-container', { timeout: 20000 });
+    await tab.evaluate(() => { const tile = document.getElementById('firstTile'); tile.scrollIntoView(); tile.focus(); });
+    await tab.waitForTimeout(300);
+    const found = await tab.evaluate(() => ({ focused: document.activeElement.className, scroll: window.scrollY }));
+    const ok = /emby-tab-button-active/.test(found.focused) && found.scroll === 0;
+    console.log(`home focus: ${ok ? 'header tab focused, page at the top' : JSON.stringify(found)}`);
     if (!ok) failures += 1;
     await context.close();
 }

@@ -69,6 +69,10 @@ Samsung certificate for that TV; tools such as Apps2Samsung take care of that.
 - **Switch user in one press.** A button next to the user button at the top
   right signs out and goes straight to the sign-in page of the same server,
   without the server choice that Sign out in the user menu shows first.
+- **Starts at the top.** When the home screen opens, the Home tab has focus
+  and the bar is in view, instead of the first tile of the first row.
+- **Follows the signed-in user.** After switching user the bar loads the new
+  user's titles, from the libraries that user can see.
 - **Server themes still apply.** Custom CSS set under Dashboard > Branding
   loads in the TV app as well. The build keeps the bar's position and buttons
   intact under a theme (tested with NeutralFin); colours from the theme, such
@@ -131,8 +135,8 @@ original and the lowered assets, in all three layouts and with the settings
 panel open, and fails when any element ends up somewhere else. It checks the
 lowered CSS against Chromium 63 support data, and covers late sign-in,
 requests that are never answered, a server theme, the slideshow moving on with
-focus following, OK on the buttons, signing in without a password, the switch-user button and
-the stored titles.
+focus following, OK on the buttons, signing in without a password, the switch-user button,
+a change of user, focus when the home screen opens and the stored titles.
 
 It does not run Chromium 63 itself, so it cannot replace a test on a TV.
 

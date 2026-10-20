@@ -114,20 +114,86 @@
         target.click();
     }, true);
 
-    var watching = setInterval(function () {
+    // The bar is rebuilt after a change of user, so watch whichever stage is
+    // on the page.
+    var watched = null;
+    setInterval(function () {
         var container = document.getElementById('slides-container');
-        if (!container) return;
-        clearInterval(watching);
+        if (!container || container === watched) return;
+        watched = container;
         new MutationObserver(function () { followSlide(container); })
             .observe(container, { subtree: true, attributes: true, attributeFilter: ['class'] });
     }, 1000);
 
+    // The bar only notices a sign-out through a hashchange event, which
+    // jellyfin-web's router does not fire, so after switching user it kept
+    // showing the previous user's titles, from libraries the new user may not
+    // see. Start it again whenever the signed-in user changes.
+    var seenSignedIn = false;
+    function currentUser() {
+        try {
+            var api = window.ApiClient;
+            return api && api.isLoggedIn() && api.accessToken() ? api.getCurrentUserId() || null : null;
+        } catch (error) {
+            return null;
+        }
+    }
+    function restartForNewUser(bar) {
+        var user = currentUser();
+        if (user) seenSignedIn = true;
+        // Before the first sign-in the bar may already run on the stored
+        // credentials; that is not a change of user.
+        if (!seenSignedIn || !bar.STATE.slideshow.hasInitialized || typeof bar.reset !== 'function') return;
+        var shownFor = bar.STATE.jellyfinData && bar.STATE.jellyfinData.userId;
+        if (!shownFor || shownFor === user) return;
+        console.log('Media Bar: ' + (user ? 'user changed' : 'signed out') + ', starting again');
+        bar.reset();
+        reloads = 0;
+    }
+
     setInterval(function () {
         var bar = window.slideshowPure;
         if (!bar || !bar.STATE) return;
+        restartForNewUser(bar);
         startWhenSignedIn(bar);
         reloadWhenEmpty(bar);
-    }, 3000);
+    }, 1000);
+
+    // When the home screen opens, jellyfin-web focuses the first tile of the
+    // first row and scrolls down to it, which pushes the bar out of view.
+    // Focus the active header tab ("Home") instead and stay at the top. Only
+    // on that first tile and before any key was pressed, so focus that
+    // jellyfin-web restores when coming back to the home screen is left alone.
+    var route = null;
+    var routeOpened = 0;
+    var keyPressed = false;
+    window.addEventListener('keydown', function () { keyPressed = true; }, true);
+    function updateRoute() {
+        var current = location.hash.split('?')[0];
+        if (current === route) return;
+        route = current;
+        routeOpened = Date.now();
+        keyPressed = false;
+    }
+    setInterval(updateRoute, 200);
+
+    function firstTile() {
+        var rows = document.querySelector('.homeSectionsContainer');
+        return rows ? rows.querySelector('.card, button, [tabindex="0"]') : null;
+    }
+
+    document.addEventListener('focusin', function (event) {
+        updateRoute();
+        if (!/^#\/home/.test(route || '') || keyPressed || Date.now() - routeOpened > 8000) return;
+        var tile = firstTile();
+        if (!tile || !(event.target === tile || tile.contains(event.target))) return;
+        var tab = document.querySelector('.skinHeader .emby-tab-button-active') ||
+            document.querySelector('#slides-container .slide.active .play-button');
+        if (!tab) return;
+        tab.focus();
+        window.scrollTo(0, 0);
+        setTimeout(function () { window.scrollTo(0, 0); }, 50);
+    });
 
     // This file runs right after slideshowpure.js, before the bar has loaded
     // anything; apply the overrides now so they hold from the first slide.
