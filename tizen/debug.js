@@ -4,7 +4,7 @@
 (function () {
     'use strict';
 
-    var MAX_LINES = 8;
+    var MAX_LINES = 14;
     var lines = [];
     var box;
 
@@ -123,8 +123,30 @@
     // Every request the page makes (data, images, stylesheets), from the
     // browser's resource timing. The default buffer only holds 150 entries.
     if (performance.setResourceTimingBufferSize) performance.setResourceTimingBufferSize(2000);
+    // jellyfin-web changes the address without a hashchange event, so watch
+    // it, and log when each screen opens and when the sign-in screen's parts
+    // arrive, counted from the moment that screen opened.
     var pageSince = 0;
-    window.addEventListener('hashchange', function () { pageSince = performance.now(); });
+    var lastRoute = location.hash.split('?')[0];
+    function secondsOnPage(time) { return ((time - pageSince) / 1000).toFixed(1) + 's'; }
+    setInterval(function () {
+        var route = location.hash.split('?')[0];
+        if (route === lastRoute) return;
+        lastRoute = route;
+        pageSince = performance.now();
+        add('P', ['screen ' + route]);
+    }, 200);
+    var MILESTONES = /\/Users\/Public|\/Users\/[^/]+\/Images\/|\/System\/Info\/Public|\/QuickConnect\/Enabled|\/Users\/AuthenticateByName|\/Branding\/|fonts\.g/;
+    if (window.PerformanceObserver) {
+        try {
+            new PerformanceObserver(function (list) {
+                list.getEntries().forEach(function (entry) {
+                    if (!MILESTONES.test(entry.name)) return;
+                    add('R', [Math.round(entry.duration) + 'ms, ready at ' + secondsOnPage(entry.responseEnd) + ' ' + shortUrl(entry.name)]);
+                });
+            }).observe({ entryTypes: ['resource'] });
+        } catch (error) { /* not supported */ }
+    }
 
     function shortUrl(url) {
         return String(url).replace(/^https?:\/\/[^/]+/, '').replace(/[?&](api_key|ApiKey)=[^&]*/g, '').slice(0, 70);
@@ -135,7 +157,7 @@
         var recent = entries.filter(function (entry) { return entry.startTime >= pageSince; });
         var out = ['requests since this page opened: ' + recent.length +
             (recent.length ? ', last ended ' + ((Math.max.apply(null, recent.map(function (e) { return e.responseEnd; })) - pageSince) / 1000).toFixed(1) + 's after opening' : '')];
-        recent.slice().sort(function (a, b) { return b.duration - a.duration; }).slice(0, 6).forEach(function (entry) {
+        recent.slice().sort(function (a, b) { return b.duration - a.duration; }).slice(0, 4).forEach(function (entry) {
             out.push('  ' + Math.round(entry.duration) + 'ms, started +' + ((entry.startTime - pageSince) / 1000).toFixed(1) + 's ' +
                 entry.initiatorType + ' ' + shortUrl(entry.name));
         });
