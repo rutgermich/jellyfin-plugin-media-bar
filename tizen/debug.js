@@ -120,6 +120,28 @@
             ' opacity=' + style(element, 'opacity') + ' visibility=' + style(element, 'visibility');
     }
 
+    // Every request the page makes (data, images, stylesheets), from the
+    // browser's resource timing. The default buffer only holds 150 entries.
+    if (performance.setResourceTimingBufferSize) performance.setResourceTimingBufferSize(2000);
+    var pageSince = 0;
+    window.addEventListener('hashchange', function () { pageSince = performance.now(); });
+
+    function shortUrl(url) {
+        return String(url).replace(/^https?:\/\/[^/]+/, '').replace(/[?&](api_key|ApiKey)=[^&]*/g, '').slice(0, 70);
+    }
+
+    function slowRequests() {
+        var entries = performance.getEntriesByType ? performance.getEntriesByType('resource') : [];
+        var recent = entries.filter(function (entry) { return entry.startTime >= pageSince; });
+        var out = ['requests since this page opened: ' + recent.length +
+            (recent.length ? ', last ended ' + ((Math.max.apply(null, recent.map(function (e) { return e.responseEnd; })) - pageSince) / 1000).toFixed(1) + 's after opening' : '')];
+        recent.slice().sort(function (a, b) { return b.duration - a.duration; }).slice(0, 6).forEach(function (entry) {
+            out.push('  ' + Math.round(entry.duration) + 'ms, started +' + ((entry.startTime - pageSince) / 1000).toFixed(1) + 's ' +
+                entry.initiatorType + ' ' + shortUrl(entry.name));
+        });
+        return out;
+    }
+
     function state() {
         var out = [];
         var chrome = /Chrom(?:e|ium)\/([\d.]+)/.exec(navigator.userAgent);
@@ -171,6 +193,7 @@
                 out.push(describe('logo', slide.querySelector('.logo')) + ' | ' + describe('buttons', slide.querySelector('.button-container')));
             }
         }
+        try { out = out.concat(slowRequests()); } catch (error) { out.push('requests: ' + error.message); }
         return out;
     }
 
