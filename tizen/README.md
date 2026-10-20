@@ -67,8 +67,8 @@ Samsung certificate for that TV; tools such as Apps2Samsung take care of that.
   who does have a password this costs one failed sign-in the first time on that
   TV; after that the TV remembers it and goes straight to the password form.
 - **Switch user in one press.** A button next to the user button at the top
-  right signs out and goes to the sign-in page, the same as Sign out at the
-  bottom of the user menu.
+  right signs out and goes straight to the sign-in page of the same server,
+  without the server choice that Sign out in the user menu shows first.
 - **Server themes still apply.** Custom CSS set under Dashboard > Branding
   loads in the TV app as well. The build keeps the bar's position and buttons
   intact under a theme (tested with NeutralFin); colours from the theme, such

@@ -89,9 +89,19 @@ let flakySeen = false;
 
 // jellyfin-web's header as libraryMenu builds it, with the user button hidden
 // until someone is signed in.
-const HEADER_PAGE = `<!doctype html><html lang="nl"><head><meta charset="utf-8">
+const HEADER_PAGE = `<!doctype html><html lang="nl" class="layout-tv"><head><meta charset="utf-8">
 <style>.hide{display:none!important}</style>
-<script>window.signedOut = 0; window.Dashboard = { logout: function () { window.signedOut += 1; } };</script>
+<script>
+window.signedOut = 0; window.shown = [];
+window.ApiClient = { serverId: function () { return 'server1'; } };
+window.NativeShell = {};
+window.Emby = { Page: { showLocalLogin: function (id) { window.shown.push('login ' + id); } } };
+// like jellyfin-web: sign out, then ask the shell to choose a server
+window.Dashboard = { logout: function () {
+    window.signedOut += 1;
+    if (typeof window.NativeShell.selectServer === 'function') window.NativeShell.selectServer(); else window.shown.push('selectserver');
+} };
+</script>
 <script defer src="switch-user.js"></script></head><body>
 <div class="skinHeader"><div class="headerTop"><div class="headerRight">
 <button class="headerSyncButton headerButton headerButtonRight hide"></button>
@@ -518,9 +528,15 @@ for (const layout of ['plate', 'marquee', 'classic']) {
         return { next: button.nextElementSibling.className, label: button.title };
     });
     await tab.click('.headerSwitchUserButton');
-    const signedOut = await tab.evaluate(() => window.signedOut);
-    const ok = hiddenBefore && /headerUserButton/.test(found.next) && found.label === 'Wissel gebruiker' && signedOut === 1;
-    console.log(`switch user: ${ok ? 'button next to the user button signs out' : JSON.stringify({ hiddenBefore, found, signedOut })}`);
+    // a later sign-out from the user menu must reach the server choice again
+    await tab.evaluate(() => window.Dashboard.logout());
+    const result = await tab.evaluate(() => ({
+        signedOut: window.signedOut, shown: window.shown,
+        focusStyle: document.querySelector('.headerSwitchUserButton').classList.contains('show-focus')
+    }));
+    const ok = hiddenBefore && /headerUserButton/.test(found.next) && found.label === 'Wissel gebruiker' && result.signedOut === 2 &&
+        JSON.stringify(result.shown) === JSON.stringify(['login server1', 'selectserver']) && result.focusStyle;
+    console.log(`switch user: ${ok ? 'signs out straight to the sign-in page, with the header focus style' : JSON.stringify({ hiddenBefore, found, result })}`);
     if (!ok) failures += 1;
     await context.close();
 }
